@@ -1,0 +1,191 @@
+import React, { useState, useMemo } from 'react';
+import { useStore } from '../context/StoreContext';
+import { ProductCard } from './ProductCard';
+import { Filter, SlidersHorizontal, ArrowUpDown, Sparkles, AlertCircle } from 'lucide-react';
+
+export const ProductGrid: React.FC = () => {
+  const {
+    products,
+    categories,
+    selectedCategoryId,
+    setSelectedCategoryId,
+    searchQuery,
+    setSearchQuery,
+    selectedFilter,
+    setSelectedFilter
+  } = useStore();
+
+  const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'name'>('featured');
+
+  // Filter products
+  const filteredProducts = useMemo(() => {
+    return products.filter((prod) => {
+      // Search
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const matchesName = prod.name.toLowerCase().includes(query);
+        const matchesBrand = prod.brand.toLowerCase().includes(query);
+        const matchesCategory = prod.categoryName.toLowerCase().includes(query);
+        const matchesDesc = prod.description.toLowerCase().includes(query);
+        if (!matchesName && !matchesBrand && !matchesCategory && !matchesDesc) {
+          return false;
+        }
+      }
+
+      // Category
+      if (selectedCategoryId && prod.categoryId !== selectedCategoryId) {
+        return false;
+      }
+
+      // Filter pills
+      if (selectedFilter === 'deals' && !prod.discountBadge && (!prod.originalPrice || prod.originalPrice <= prod.price)) {
+        return false;
+      }
+      if (selectedFilter === 'new' && !prod.isNew) {
+        return false;
+      }
+      if (selectedFilter === 'bestsellers' && !prod.isBestSeller) {
+        return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'price-asc') return a.price - b.price;
+      if (sortBy === 'price-desc') return b.price - a.price;
+      if (sortBy === 'name') return a.name.localeCompare(b.name, 'ar');
+      return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
+    });
+  }, [products, selectedCategoryId, searchQuery, selectedFilter, sortBy]);
+
+  const currentCategoryName = categories.find(c => c.id === selectedCategoryId)?.name;
+
+  return (
+    <section className="max-w-7xl mx-auto px-3 sm:px-4 py-6">
+      {/* Section Header */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 shadow-sm mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-6 rounded-full bg-blue-600 inline-block" />
+              <h2 className="text-base sm:text-xl font-black text-slate-900">
+                {searchQuery
+                  ? `نتائج البحث عن: "${searchQuery}"`
+                  : currentCategoryName
+                  ? currentCategoryName
+                  : selectedFilter === 'deals'
+                  ? 'أقوى العروض والخصومات الحالية'
+                  : selectedFilter === 'new'
+                  ? 'أحدث المنتجات التي وصلت المحل'
+                  : selectedFilter === 'bestsellers'
+                  ? 'المنتجات الأكثر طلباً ومبيعاً'
+                  : 'كافة المعروضات ولوازم المعمار'}
+              </h2>
+            </div>
+            <p className="text-xs text-slate-600 mt-1 mr-4">
+              إجمالي المنتجات المعروضة: {filteredProducts.length} صنف متوفر في المخزن
+            </p>
+          </div>
+
+          {/* Sort Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
+              <ArrowUpDown className="w-3.5 h-3.5 text-blue-600" />
+              <span>ترتيب حسب:</span>
+            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="featured">المميز والأكثر تطابقاً</option>
+              <option value="price-asc">السعر: من الأقل للأعلى</option>
+              <option value="price-desc">السعر: من الأعلى للأقل</option>
+              <option value="name">الاسم أبجدياً</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Active Filters Badges */}
+        {(selectedCategoryId || selectedFilter !== 'all' || searchQuery) && (
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100 text-xs">
+            <span className="text-slate-600 font-bold">الفلاتر النشطة:</span>
+            {selectedCategoryId && (
+              <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-bold border border-blue-200">
+                <span>القسم: {currentCategoryName}</span>
+                <button
+                  onClick={() => setSelectedCategoryId(null)}
+                  className="hover:text-blue-900 text-xs mr-1"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {selectedFilter !== 'all' && (
+              <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full font-bold border border-amber-200">
+                <span>
+                  {selectedFilter === 'deals' ? 'عروض فقط' : selectedFilter === 'new' ? 'جديد فقط' : 'الأكثر طلباً'}
+                </span>
+                <button
+                  onClick={() => setSelectedFilter('all')}
+                  className="hover:text-amber-900 text-xs mr-1"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {searchQuery && (
+              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full font-bold">
+                <span>بحث: {searchQuery}</span>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="hover:text-slate-900 text-xs mr-1"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setSelectedCategoryId(null);
+                setSelectedFilter('all');
+                setSearchQuery('');
+              }}
+              className="text-xs text-rose-600 hover:underline font-bold mr-auto"
+            >
+              إلغاء كل الفلاتر
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Grid of Product Cards */}
+      {filteredProducts.length > 0 ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+          {filteredProducts.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center max-w-lg mx-auto">
+          <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">
+            لا توجد منتجات تطابق بحثك حالياً
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500 mb-4">
+            جرب كتابة اسم مختلف أو إزالة الفلاتر، أو تواصل مع خدمة العملاء لتوفير طلبك الخاص.
+          </p>
+          <button
+            onClick={() => {
+              setSelectedCategoryId(null);
+              setSelectedFilter('all');
+              setSearchQuery('');
+            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow transition-colors"
+          >
+            إظهار كافة منتجات المحل
+          </button>
+        </div>
+      )}
+    </section>
+  );
+};

@@ -1,0 +1,6 @@
+{
+  "name": "الموان للحدايد والبويات ولوازم المعمار",
+  "description": "متجر إلكتروني احترافي متكامل للحدايد والبويات والعدد اليدوية والكهربائية ولوازم المعمار مع لوحة تحكم كاملة للمالك وميزة تلوين بالكمبيوتر",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
