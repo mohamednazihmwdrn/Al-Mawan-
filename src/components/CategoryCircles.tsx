@@ -3,7 +3,9 @@ import { useStore } from '../context/StoreContext';
 import { ChevronLeft } from 'lucide-react';
 
 export const CategoryCircles: React.FC = () => {
-  const { categories, selectedCategoryId, setSelectedCategoryId, setSelectedFilter } = useStore();
+  const { categories, products, settings, selectedCategoryId, setSelectedCategoryId, setSelectedFilter } = useStore();
+
+  if (categories.length === 0) return null;
 
   const handleSelect = (catId: string) => {
     setSelectedCategoryId(catId);
@@ -15,10 +17,10 @@ export const CategoryCircles: React.FC = () => {
       <div className="flex items-center justify-between mb-3 sm:mb-4">
         <div>
           <h2 className="text-base sm:text-xl font-black text-slate-900 tracking-tight">
-            تصفح أقسام المحل الرئيسية
+            {settings.categoriesTitle || 'تصفح أقسام المحل الرئيسية'}
           </h2>
           <p className="text-xs text-slate-500">
-            عدد أصلية، دهانات كمبيوتر، لوازم نجارة ومعمار
+            {settings.categoriesSubtitle || 'عدد أصلية، دهانات كمبيوتر، لوازم نجارة ومعمار'}
           </p>
         </div>
 
@@ -37,6 +39,7 @@ export const CategoryCircles: React.FC = () => {
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-3 sm:gap-4">
         {categories.map((cat) => {
           const isSelected = selectedCategoryId === cat.id;
+          const realCount = products.filter((p) => p.categoryId === cat.id).length;
           return (
             <button
               key={cat.id}
@@ -68,7 +71,7 @@ export const CategoryCircles: React.FC = () => {
                 {cat.name}
               </span>
               <span className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                {cat.itemCount || 10}+ صنف
+                {realCount > 0 ? `${realCount} صنف` : 'قسم رئيسي'}
               </span>
             </button>
           );

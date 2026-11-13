@@ -54,6 +54,11 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-[#163674] text-white shadow-lg border-b border-indigo-900/40">
+      {settings.announcementNotice?.trim() && (
+        <div className="bg-amber-400 text-slate-950 text-[11px] sm:text-xs font-black text-center py-1.5 px-3">
+          {settings.announcementNotice}
+        </div>
+      )}
       {/* Main Header Container */}
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3.5">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -138,14 +143,16 @@ export const Header: React.FC = () => {
             <PWAInstallButton variant="header" />
 
             {/* Computer Paint Studio Button */}
-            <button
-              onClick={() => setIsPaintStudioOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white font-black rounded-xl text-xs shadow-md transition-all active:scale-95 border border-teal-400/30"
-              title="كمبيوتر خلط الألوان الفوري"
-            >
-              <Palette className="w-4 h-4 text-amber-300" />
-              <span className="hidden sm:inline">كمبيوتر الألوان</span>
-            </button>
+            {settings.showPaintStudio !== false && (
+              <button
+                onClick={() => setIsPaintStudioOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white font-black rounded-xl text-xs shadow-md transition-all active:scale-95 border border-teal-400/30"
+                title="كمبيوتر خلط الألوان الفوري"
+              >
+                <Palette className="w-4 h-4 text-amber-300" />
+                <span className="hidden sm:inline">كمبيوتر الألوان</span>
+              </button>
+            )}
 
             {/* Shopping Cart Button */}
             <button
@@ -225,13 +232,15 @@ export const Header: React.FC = () => {
             <span>العروض والخصومات</span>
           </button>
 
-          <button
-            onClick={() => setIsPaintStudioOpen(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold shadow hover:opacity-90 transition-all"
-          >
-            <Palette className="w-3.5 h-3.5 text-amber-300" />
-            <span>كمبيوتر الألوان (جديد)</span>
-          </button>
+          {settings.showPaintStudio !== false && (
+            <button
+              onClick={() => setIsPaintStudioOpen(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold shadow hover:opacity-90 transition-all"
+            >
+              <Palette className="w-3.5 h-3.5 text-amber-300" />
+              <span>كمبيوتر الألوان (جديد)</span>
+            </button>
+          )}
 
           {categories.map((cat) => (
             <button
@@ -261,16 +270,18 @@ export const Header: React.FC = () => {
               <span>جميع المنتجات والمعروضات</span>
               <Sparkles className="w-4 h-4 text-amber-400" />
             </button>
-            <button
-              onClick={() => {
-                setIsPaintStudioOpen(true);
-                setMobileMenuOpen(false);
-              }}
-              className="w-full text-right py-2 px-3 rounded-lg bg-teal-800/40 border border-teal-500/30 text-teal-200 flex items-center justify-between"
-            >
-              <span>🎨 استوديو كمبيوتر الألوان وتحديد الأكواد</span>
-              <span className="text-[10px] bg-teal-500 text-white px-2 py-0.5 rounded-full">فوري</span>
-            </button>
+            {settings.showPaintStudio !== false && (
+              <button
+                onClick={() => {
+                  setIsPaintStudioOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-right py-2 px-3 rounded-lg bg-teal-800/40 border border-teal-500/30 text-teal-200 flex items-center justify-between"
+              >
+                <span>🎨 استوديو كمبيوتر الألوان وتحديد الأكواد</span>
+                <span className="text-[10px] bg-teal-500 text-white px-2 py-0.5 rounded-full">فوري</span>
+              </button>
+            )}
             {categories.map((cat) => (
               <button
                 key={cat.id}

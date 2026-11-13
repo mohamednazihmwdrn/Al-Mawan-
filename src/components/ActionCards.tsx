@@ -3,16 +3,18 @@ import { useStore } from '../context/StoreContext';
 import { Tag, Sparkles, Star, Palette } from 'lucide-react';
 
 export const ActionCards: React.FC = () => {
-  const { selectedFilter, setSelectedFilter, setSelectedCategoryId, setIsPaintStudioOpen } = useStore();
+  const { settings, selectedFilter, setSelectedFilter, setSelectedCategoryId, setIsPaintStudioOpen } = useStore();
 
   const handleFilter = (filter: 'all' | 'deals' | 'new' | 'bestsellers') => {
     setSelectedFilter(filter);
     setSelectedCategoryId(null);
   };
 
+  const showPaint = settings.showPaintStudio !== false;
+
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 sm:py-3">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className={`grid grid-cols-2 ${showPaint ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-2.5 sm:gap-4`}>
         
         {/* Offers & Discounts */}
         <button
@@ -47,7 +49,7 @@ export const ActionCards: React.FC = () => {
           <span className="text-sm sm:text-base font-black text-slate-800 group-hover:text-sky-600 transition-colors">
             وصل حديثاً
           </span>
-          <span className="text-[11px] text-slate-500 mt-0.5">أحدث موديلات 2026</span>
+          <span className="text-[11px] text-slate-500 mt-0.5">أحدث الموديلات والعدد</span>
         </button>
 
         {/* Best Sellers */}
@@ -69,21 +71,23 @@ export const ActionCards: React.FC = () => {
         </button>
 
         {/* Computer Paint Studio Card */}
-        <button
-          onClick={() => setIsPaintStudioOpen(true)}
-          className="rounded-2xl p-4 sm:p-5 text-center flex flex-col items-center justify-center transition-all duration-200 border bg-gradient-to-br from-teal-50 to-emerald-50 border-teal-200 hover:border-teal-400 hover:shadow-md group relative overflow-hidden"
-        >
-          <span className="absolute top-2 left-2 bg-teal-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-            جديد
-          </span>
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-teal-500 flex items-center justify-center text-white mb-2.5 group-hover:scale-110 transition-transform shadow-md">
-            <Palette className="w-6 h-6 text-amber-300" />
-          </div>
-          <span className="text-sm sm:text-base font-black text-teal-900 group-hover:text-teal-700 transition-colors">
-            كمبيوتر الألوان
-          </span>
-          <span className="text-[11px] text-teal-600 font-semibold mt-0.5">تلوين وحساب الدهان فوري</span>
-        </button>
+        {showPaint && (
+          <button
+            onClick={() => setIsPaintStudioOpen(true)}
+            className="rounded-2xl p-4 sm:p-5 text-center flex flex-col items-center justify-center transition-all duration-200 border bg-gradient-to-br from-teal-50 to-emerald-50 border-teal-200 hover:border-teal-400 hover:shadow-md group relative overflow-hidden"
+          >
+            <span className="absolute top-2 left-2 bg-teal-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+              جديد
+            </span>
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-teal-500 flex items-center justify-center text-white mb-2.5 group-hover:scale-110 transition-transform shadow-md">
+              <Palette className="w-6 h-6 text-amber-300" />
+            </div>
+            <span className="text-sm sm:text-base font-black text-teal-900 group-hover:text-teal-700 transition-colors">
+              كمبيوتر الألوان
+            </span>
+            <span className="text-[11px] text-teal-600 font-semibold mt-0.5">تلوين وحساب الدهان فوري</span>
+          </button>
+        )}
 
       </div>
     </div>

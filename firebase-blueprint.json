@@ -2,7 +2,7 @@
   "entities": {
     "StoreSettings": {
       "title": "StoreSettings",
-      "description": "Configuration and contact information for Al-Mawan Store",
+      "description": "Configuration, section copy, visibility toggles, and contact information for Al-Mawan Store",
       "type": "object",
       "properties": {
         "storeName": { "type": "string", "minLength": 2, "maxLength": 150 },
@@ -16,6 +16,24 @@
         "deliveryFee": { "type": "number" },
         "freeDeliveryThreshold": { "type": "number" },
         "currency": { "type": "string", "maxLength": 10 },
+        "facebookUrl": { "type": "string", "maxLength": 300 },
+        "locationMapUrl": { "type": "string", "maxLength": 500 },
+        "categoriesTitle": { "type": "string", "maxLength": 150 },
+        "categoriesSubtitle": { "type": "string", "maxLength": 250 },
+        "productsTitle": { "type": "string", "maxLength": 150 },
+        "brandsTitle": { "type": "string", "maxLength": 150 },
+        "brandsSubtitle": { "type": "string", "maxLength": 250 },
+        "contactBadge": { "type": "string", "maxLength": 100 },
+        "contactTitle": { "type": "string", "maxLength": 180 },
+        "contactDescription": { "type": "string", "maxLength": 500 },
+        "footerBio": { "type": "string", "maxLength": 500 },
+        "showHeroBanner": { "type": "boolean" },
+        "showValueProps": { "type": "boolean" },
+        "showActionCards": { "type": "boolean" },
+        "showCategories": { "type": "boolean" },
+        "showBrands": { "type": "boolean" },
+        "showContactSection": { "type": "boolean" },
+        "showPaintStudio": { "type": "boolean" },
         "commercialReg": { "type": "string", "maxLength": 50 },
         "taxNumber": { "type": "string", "maxLength": 50 },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -31,7 +49,7 @@
         "title": { "type": "string", "minLength": 2, "maxLength": 200 },
         "subtitle": { "type": "string", "maxLength": 250 },
         "description": { "type": "string", "maxLength": 600 },
-        "image": { "type": "string", "minLength": 5, "maxLength": 50000 },
+        "image": { "type": "string", "minLength": 5, "maxLength": 150000 },
         "buttonText": { "type": "string", "maxLength": 60 },
         "buttonActionType": { "type": "string", "enum": ["category", "whatsapp", "paint_studio", "link"] },
         "buttonTarget": { "type": "string", "maxLength": 200 },
@@ -48,10 +66,36 @@
         "name": { "type": "string", "minLength": 2, "maxLength": 100 },
         "iconName": { "type": "string", "maxLength": 50 },
         "description": { "type": "string", "maxLength": 400 },
-        "image": { "type": "string", "minLength": 5, "maxLength": 50000 },
+        "image": { "type": "string", "minLength": 5, "maxLength": 150000 },
         "itemCount": { "type": "number" }
       },
       "required": ["name", "image"]
+    },
+    "StoreBrand": {
+      "title": "StoreBrand",
+      "description": "Partner hardware or paint brand shown on the storefront",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "color": { "type": "string", "maxLength": 60 },
+        "logoUrl": { "type": "string", "maxLength": 150000 },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["name", "label"]
+    },
+    "StoreFeature": {
+      "title": "StoreFeature",
+      "description": "Homepage value proposition highlight card managed by owner",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "subtitle": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "iconName": { "type": "string", "maxLength": 40 },
+        "colorTheme": { "type": "string", "maxLength": 40 },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["title", "subtitle", "iconName", "colorTheme"]
     },
     "Product": {
       "title": "Product",
@@ -65,7 +109,7 @@
         "price": { "type": "number" },
         "originalPrice": { "type": "number" },
         "discountBadge": { "type": "string", "maxLength": 60 },
-        "image": { "type": "string", "minLength": 5, "maxLength": 100000 },
+        "image": { "type": "string", "minLength": 5, "maxLength": 200000 },
         "images": { "type": "array" },
         "description": { "type": "string", "minLength": 2, "maxLength": 3000 },
         "inStock": { "type": "boolean" },
@@ -161,6 +205,14 @@
     "/categories/{categoryId}": {
       "schema": { "$ref": "#/entities/Category" },
       "description": "Store product categories"
+    },
+    "/brands/{brandId}": {
+      "schema": { "$ref": "#/entities/StoreBrand" },
+      "description": "Partner brands managed by the store owner"
+    },
+    "/features/{featureId}": {
+      "schema": { "$ref": "#/entities/StoreFeature" },
+      "description": "Storefront feature cards managed by the store owner"
     },
     "/products/{productId}": {
       "schema": { "$ref": "#/entities/Product" },

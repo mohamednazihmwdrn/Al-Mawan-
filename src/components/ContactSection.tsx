@@ -92,15 +92,15 @@ export const ContactSection: React.FC = () => {
             <div className="space-y-4">
               <div className="inline-flex items-center gap-2 bg-amber-400/15 border border-amber-400/30 text-amber-300 px-3 py-1 rounded-full text-xs font-bold">
                 <Headphones className="w-4 h-4" />
-                <span>خدمة العملاء واستشارات المعمار</span>
+                <span>{settings.contactBadge || 'خدمة العملاء واستشارات المعمار'}</span>
               </div>
 
               <h2 className="text-xl sm:text-2xl font-black leading-snug">
-                تواصل مع {settings.storeName} مباشرة
+                {settings.contactTitle || `تواصل مع ${settings.storeName} مباشرة`}
               </h2>
 
               <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed">
-                هل تبحث عن معدة معينة، تسعير جملة لمشروع مقاولات، أو كود لون بالكمبيوتر؟ أرسل استفسارك وسيصل مباشرة لإدارة المتجر أو تواصل فوراً عبر واتساب.
+                {settings.contactDescription || 'هل تبحث عن معدة معينة، تسعير جملة لمشروع مقاولات، أو كود لون بالكمبيوتر؟ أرسل استفسارك وسيصل مباشرة لإدارة المتجر أو تواصل فوراً عبر واتساب.'}
               </p>
             </div>
 

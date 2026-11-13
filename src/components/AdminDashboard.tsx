@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Product, OrderStatus, BannerSlide, ContactInquiry } from '../types/store';
+import {
+  Product,
+  OrderStatus,
+  BannerSlide,
+  ContactInquiry,
+  Category,
+  StoreBrand,
+  StoreFeature
+} from '../types/store';
 import { compressImageFile } from '../utils/imageCompress';
 import {
   LayoutDashboard,
@@ -23,7 +31,10 @@ import {
   Upload,
   Mail,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  Award,
+  Eye
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -35,15 +46,25 @@ export const AdminDashboard: React.FC = () => {
     addProduct,
     updateProduct,
     deleteProduct,
+    clearAllProducts,
     toggleStock,
     categories,
     addCategory,
+    updateCategory,
     deleteCategory,
     banners,
     addBanner,
     updateBanner,
     deleteBanner,
     toggleBannerActive,
+    brands,
+    addBrand,
+    updateBrand,
+    deleteBrand,
+    features,
+    addFeature,
+    updateFeature,
+    deleteFeature,
     orders,
     updateOrderStatus,
     deleteOrder,
@@ -70,7 +91,7 @@ export const AdminDashboard: React.FC = () => {
     brand: '',
     categoryId: categories[0]?.id || 'power-tools',
     price: 100,
-    originalPrice: 120,
+    originalPrice: 0,
     discountBadge: '',
     image: '',
     extraImagesText: '',
@@ -78,7 +99,11 @@ export const AdminDashboard: React.FC = () => {
     inStock: true,
     stockCount: 20,
     unit: 'قطعة',
-    optionsText: ''
+    optionsText: '',
+    isFeatured: true,
+    isNew: false,
+    isBestSeller: false,
+    specs: [] as { label: string; value: string }[]
   });
 
   // Banner modal state
@@ -102,10 +127,29 @@ export const AdminDashboard: React.FC = () => {
     setSettingsForm({ ...settings });
   }, [settings]);
 
-  // Category modal state
+  // Category form state (Add & Edit)
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [newCatName, setNewCatName] = useState('');
   const [newCatDesc, setNewCatDesc] = useState('');
   const [newCatImage, setNewCatImage] = useState('');
+
+  // Feature (ValueProps) form state
+  const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
+  const [featureForm, setFeatureForm] = useState({
+    title: '',
+    subtitle: '',
+    iconName: 'ShieldCheck',
+    colorTheme: 'blue'
+  });
+
+  // Partner Brand form state
+  const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
+  const [brandForm, setBrandForm] = useState({
+    name: '',
+    label: '',
+    color: 'blue',
+    logoUrl: ''
+  });
 
   // Search & filter in admin
   const [adminSearch, setAdminSearch] = useState('');
@@ -125,16 +169,20 @@ export const AdminDashboard: React.FC = () => {
       name: '',
       brand: 'الموان',
       categoryId: categories[0]?.id || 'power-tools',
-      price: 150,
-      originalPrice: 180,
-      discountBadge: 'عرض خاص',
-      image: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=600&q=80',
+      price: 0,
+      originalPrice: 0,
+      discountBadge: '',
+      image: '',
       extraImagesText: '',
-      description: 'أداة عالية الجودة معتمدة للأعمال الإنشائية والورش.',
+      description: '',
       inStock: true,
-      stockCount: 25,
+      stockCount: 10,
       unit: 'قطعة',
-      optionsText: ''
+      optionsText: '',
+      isFeatured: true,
+      isNew: true,
+      isBestSeller: false,
+      specs: []
     });
     setIsProductModalOpen(true);
   };
@@ -147,7 +195,7 @@ export const AdminDashboard: React.FC = () => {
       brand: prod.brand,
       categoryId: prod.categoryId,
       price: prod.price,
-      originalPrice: prod.originalPrice || prod.price,
+      originalPrice: prod.originalPrice || 0,
       discountBadge: prod.discountBadge || '',
       image: prod.image,
       extraImagesText: extraImgs.join('\n'),
@@ -155,7 +203,11 @@ export const AdminDashboard: React.FC = () => {
       inStock: prod.inStock,
       stockCount: prod.stockCount,
       unit: prod.unit,
-      optionsText: prod.options?.join(', ') || ''
+      optionsText: prod.options?.join(', ') || '',
+      isFeatured: Boolean(prod.isFeatured),
+      isNew: Boolean(prod.isNew),
+      isBestSeller: Boolean(prod.isBestSeller),
+      specs: prod.specs ? prod.specs.map((s) => ({ ...s })) : []
     });
     setIsProductModalOpen(true);
   };
@@ -213,6 +265,10 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!productForm.image.trim()) {
+      showToast('يرجى رفع صورة للمنتج أو وضع رابط صورة صحيح');
+      return;
+    }
     const cat = categories.find(c => c.id === productForm.categoryId);
     const options = productForm.optionsText
       ? productForm.optionsText.split(',').map(s => s.trim()).filter(Boolean)
@@ -222,44 +278,37 @@ export const AdminDashboard: React.FC = () => {
       .map(s => s.trim())
       .filter(Boolean);
     const allImages = Array.from(new Set([productForm.image.trim(), ...extraImages].filter(Boolean))).slice(0, 15);
+    const cleanSpecs = productForm.specs
+      .map((s) => ({ label: s.label.trim(), value: s.value.trim() }))
+      .filter((s) => s.label && s.value);
+
+    const payload = {
+      name: productForm.name,
+      brand: productForm.brand,
+      categoryId: productForm.categoryId,
+      categoryName: cat?.name || 'عام',
+      price: Number(productForm.price),
+      originalPrice: Number(productForm.originalPrice) > 0 ? Number(productForm.originalPrice) : undefined,
+      discountBadge: productForm.discountBadge || undefined,
+      image: productForm.image,
+      images: allImages,
+      description: productForm.description,
+      inStock: productForm.inStock,
+      stockCount: Number(productForm.stockCount),
+      unit: productForm.unit,
+      isFeatured: productForm.isFeatured,
+      isNew: productForm.isNew,
+      isBestSeller: productForm.isBestSeller,
+      hasOptions: !!(options && options.length > 0),
+      options,
+      specs: cleanSpecs.length > 0 ? cleanSpecs : undefined
+    };
 
     try {
       if (editingProductId) {
-        await updateProduct(editingProductId, {
-          name: productForm.name,
-          brand: productForm.brand,
-          categoryId: productForm.categoryId,
-          categoryName: cat?.name || 'عام',
-          price: Number(productForm.price),
-          originalPrice: Number(productForm.originalPrice),
-          discountBadge: productForm.discountBadge || undefined,
-          image: productForm.image,
-          images: allImages,
-          description: productForm.description,
-          inStock: productForm.inStock,
-          stockCount: Number(productForm.stockCount),
-          unit: productForm.unit,
-          hasOptions: !!(options && options.length > 0),
-          options
-        });
+        await updateProduct(editingProductId, payload);
       } else {
-        await addProduct({
-          name: productForm.name,
-          brand: productForm.brand,
-          categoryId: productForm.categoryId,
-          categoryName: cat?.name || 'عام',
-          price: Number(productForm.price),
-          originalPrice: Number(productForm.originalPrice),
-          discountBadge: productForm.discountBadge || undefined,
-          image: productForm.image,
-          images: allImages,
-          description: productForm.description,
-          inStock: productForm.inStock,
-          stockCount: Number(productForm.stockCount),
-          unit: productForm.unit,
-          hasOptions: !!(options && options.length > 0),
-          options
-        });
+        await addProduct(payload);
       }
       setIsProductModalOpen(false);
     } catch {
@@ -328,23 +377,132 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleCategoryFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingImage(true);
+    try {
+      const compressed = await compressImageFile(file, 600, 90000);
+      setNewCatImage(compressed);
+      showToast('تم تجهيز صورة القسم بنجاح');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'تعذر معالجة الصورة');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleEditCategoryStart = (cat: Category) => {
+    setEditingCategoryId(cat.id);
+    setNewCatName(cat.name);
+    setNewCatDesc(cat.description || '');
+    setNewCatImage(cat.image);
+  };
+
+  const handleCancelCategoryEdit = () => {
+    setEditingCategoryId(null);
+    setNewCatName('');
+    setNewCatDesc('');
+    setNewCatImage('');
+  };
+
   const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
+    const catImage =
+      newCatImage.trim() ||
+      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80';
     try {
-      await addCategory({
-        name: newCatName.trim(),
-        description: newCatDesc.trim(),
-        image: newCatImage.trim() || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-        iconName: 'Package',
-        itemCount: 0
-      });
-      setNewCatName('');
-      setNewCatDesc('');
-      setNewCatImage('');
+      if (editingCategoryId) {
+        await updateCategory(editingCategoryId, {
+          name: newCatName.trim(),
+          description: newCatDesc.trim(),
+          image: catImage
+        });
+      } else {
+        await addCategory({
+          name: newCatName.trim(),
+          description: newCatDesc.trim(),
+          image: catImage,
+          iconName: 'Package',
+          itemCount: 0
+        });
+      }
+      handleCancelCategoryEdit();
     } catch {
       // handled in StoreContext
     }
+  };
+
+  // Feature Handlers
+  const handleSaveFeature = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!featureForm.title.trim() || !featureForm.subtitle.trim()) return;
+    try {
+      if (editingFeatureId) {
+        await updateFeature(editingFeatureId, featureForm);
+      } else {
+        await addFeature(featureForm);
+      }
+      setEditingFeatureId(null);
+      setFeatureForm({ title: '', subtitle: '', iconName: 'ShieldCheck', colorTheme: 'blue' });
+    } catch {
+      // handled in StoreContext
+    }
+  };
+
+  const handleEditFeatureStart = (ft: StoreFeature) => {
+    setEditingFeatureId(ft.id);
+    setFeatureForm({
+      title: ft.title,
+      subtitle: ft.subtitle,
+      iconName: ft.iconName || 'ShieldCheck',
+      colorTheme: ft.colorTheme || 'blue'
+    });
+  };
+
+  // Brand Handlers
+  const handleBrandLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingImage(true);
+    try {
+      const compressed = await compressImageFile(file, 400, 75000);
+      setBrandForm((prev) => ({ ...prev, logoUrl: compressed }));
+      showToast('تم تجهيز شعار الماركة بنجاح');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'تعذر معالجة الشعار');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandForm.name.trim() || !brandForm.label.trim()) return;
+    try {
+      if (editingBrandId) {
+        await updateBrand(editingBrandId, brandForm);
+      } else {
+        await addBrand(brandForm);
+      }
+      setEditingBrandId(null);
+      setBrandForm({ name: '', label: '', color: 'blue', logoUrl: '' });
+    } catch {
+      // handled in StoreContext
+    }
+  };
+
+  const handleEditBrandStart = (br: StoreBrand) => {
+    setEditingBrandId(br.id);
+    setBrandForm({
+      name: br.name,
+      label: br.label,
+      color: br.color || 'blue',
+      logoUrl: br.logoUrl || ''
+    });
   };
 
   const filteredOrders = orders.filter(o => {
@@ -475,7 +633,17 @@ export const AdminDashboard: React.FC = () => {
               }`}
             >
               <FolderTree className="w-4 h-4" />
-              <span>الأقسام والتصنيفات</span>
+              <span>الأقسام والتصنيفات ({categories.length})</span>
+            </button>
+
+            <button
+              onClick={() => setAdminSubTab('site_content')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-all ${
+                adminSubTab === 'site_content' ? 'bg-amber-400 text-slate-950 font-black shadow' : 'text-blue-200 hover:bg-white/10'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>المميزات والماركات</span>
             </button>
 
             <button
@@ -485,7 +653,7 @@ export const AdminDashboard: React.FC = () => {
               }`}
             >
               <Settings className="w-4 h-4" />
-              <span>إعدادات المتجر والتواصل</span>
+              <span>إعدادات ونصوص الموقع</span>
             </button>
           </div>
         </div>
@@ -502,7 +670,7 @@ export const AdminDashboard: React.FC = () => {
                   المزامنة السحابية للنشر غير مفعّلة في هذه الجلسة
                 </div>
                 <p className="text-amber-800 mt-0.5">
-                  لتتمكن من إضافة/تعديل المنتجات والبنرات والرد على استفسارات وطلبات العملاء ومزامنتها لحظياً في جميع أنحاء مصر، يرجى تأكيد الدخول بحساب المالك السحابي (Google).
+                  لتتمكن من إضافة/تعديل المنتجات والأقسام والبنرات ونصوص الموقع ومزامنتها لحظياً، يرجى تأكيد الدخول بحساب المالك السحابي (Google).
                 </p>
               </div>
             </div>
@@ -521,10 +689,10 @@ export const AdminDashboard: React.FC = () => {
               <Cloud className="w-5 h-5 text-blue-600 shrink-0" />
               <div>
                 <div className="font-black text-blue-950">
-                  حساب المالك السحابي متصل — الكتالوج الافتراضي جاهز للنشر على السحابة
+                  حساب المالك السحابي متصل — إعدادات وأقسام المتجر جاهزة للنشر
                 </div>
                 <p className="text-blue-800 mt-0.5">
-                  اضغط لنشر المنتجات والأقسام والبنرات الافتراضية إلى قاعدة البيانات السحابية ليراها ويقيّمها جميع العملاء فوراً.
+                  اضغط لمزامنة الأقسام والبنرات والإعدادات الأساسية إلى قاعدة البيانات السحابية.
                 </p>
               </div>
             </div>
@@ -534,7 +702,7 @@ export const AdminDashboard: React.FC = () => {
               className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow shrink-0"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>نشر الكتالوج للسحابة الآن</span>
+              <span>مزامنة الإعدادات للسحابة الآن</span>
             </button>
           </div>
         ) : null}
@@ -752,98 +920,134 @@ export const AdminDashboard: React.FC = () => {
                   value={adminSearch}
                   onChange={(e) => setAdminSearch(e.target.value)}
                   placeholder="ابحث بالاسم أو الماركة أو القسم..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl pr-9 pl-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              <button
-                onClick={handleOpenAddProduct}
-                className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                <span>إضافة منتج جديد</span>
-              </button>
-            </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {products.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`هل أنت متأكد من حذف جميع المنتجات (${products.length} منتج) لتنظيف المتجر بالكامل؟`)) {
+                        clearAllProducts();
+                      }
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>حذف جميع المنتجات</span>
+                  </button>
+                )}
 
-            {/* Products Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
-                    <tr>
-                      <th className="p-3.5">المنتج والماركة</th>
-                      <th className="p-3.5">القسم</th>
-                      <th className="p-3.5">السعر الحالي</th>
-                      <th className="p-3.5">السعر الأصلي</th>
-                      <th className="p-3.5">حالة التوفر</th>
-                      <th className="p-3.5">المخزون</th>
-                      <th className="p-3.5 text-center">إجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredAdminProducts.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3.5 flex items-center gap-3">
-                          <img
-                            src={p.image}
-                            alt={p.name}
-                            className="w-10 h-10 rounded-lg object-contain bg-slate-100 border border-slate-200 p-0.5 shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
-                            <div className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</div>
-                          </div>
-                        </td>
-                        <td className="p-3.5 text-slate-600">{p.categoryName}</td>
-                        <td className="p-3.5 font-black text-rose-600">
-                          EGP {p.price.toFixed(2)}
-                        </td>
-                        <td className="p-3.5 text-slate-400 line-through">
-                          {p.originalPrice ? `EGP ${p.originalPrice.toFixed(2)}` : '-'}
-                        </td>
-                        <td className="p-3.5">
-                          <button
-                            onClick={() => toggleStock(p.id)}
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                              p.inStock
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border-rose-200'
-                            }`}
-                          >
-                            {p.inStock ? 'متوفر بالمخزن' : 'غير متوفر'}
-                          </button>
-                        </td>
-                        <td className="p-3.5 font-bold text-slate-700">
-                          {p.stockCount} {p.unit}
-                        </td>
-                        <td className="p-3.5">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleOpenEditProduct(p)}
-                              className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                              title="تعديل"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm(`هل أنت متأكد من حذف المنتج: ${p.name}؟`)) {
-                                  deleteProduct(p.id);
-                                }
-                              }}
-                              className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                              title="حذف"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <button
+                  onClick={handleOpenAddProduct}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>إضافة منتج جديد</span>
+                </button>
               </div>
             </div>
+
+            {products.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center shadow-sm space-y-3">
+                <Package className="w-12 h-12 text-blue-300 mx-auto" />
+                <div className="text-base font-black text-slate-900">
+                  المتجر نظيف تماماً وجاهز لإضافة منتجاتك الحقيقية
+                </div>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  لا توجد أي منتجات وهمية الآن. اضغط على زر "إضافة منتج جديد" لإضافة أول منتج بصوره وسعره ومواصفاته ليظهر فوراً للعملاء.
+                </p>
+                <button
+                  onClick={handleOpenAddProduct}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs inline-flex items-center gap-1.5 shadow-md"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>إضافة أول منتج الآن</span>
+                </button>
+              </div>
+            ) : (
+              /* Products Table */
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                      <tr>
+                        <th className="p-3.5">المنتج والماركة</th>
+                        <th className="p-3.5">القسم</th>
+                        <th className="p-3.5">السعر الحالي</th>
+                        <th className="p-3.5">السعر الأصلي</th>
+                        <th className="p-3.5">حالة التوفر</th>
+                        <th className="p-3.5">المخزون</th>
+                        <th className="p-3.5 text-center">إجراءات</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredAdminProducts.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-3.5 flex items-center gap-3">
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className="w-10 h-10 rounded-lg object-contain bg-slate-100 border border-slate-200 p-0.5 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
+                              <div className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</div>
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-slate-600">{p.categoryName}</td>
+                          <td className="p-3.5 font-black text-rose-600">
+                            EGP {p.price.toFixed(2)}
+                          </td>
+                          <td className="p-3.5 text-slate-400 line-through">
+                            {p.originalPrice ? `EGP ${p.originalPrice.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="p-3.5">
+                            <button
+                              onClick={() => toggleStock(p.id)}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                                p.inStock
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                              }`}
+                            >
+                              {p.inStock ? 'متوفر بالمخزن' : 'غير متوفر'}
+                            </button>
+                          </td>
+                          <td className="p-3.5 font-bold text-slate-700">
+                            {p.stockCount} {p.unit}
+                          </td>
+                          <td className="p-3.5">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenEditProduct(p)}
+                                className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                title="تعديل"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`هل أنت متأكد من حذف المنتج: ${p.name}؟`)) {
+                                    deleteProduct(p.id);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                                title="حذف"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
           </div>
         )}
@@ -969,6 +1173,20 @@ export const AdminDashboard: React.FC = () => {
                         </span>
                       </div>
                     </div>
+
+                    {ord.items && ord.items.length > 0 && (
+                      <div className="bg-slate-50/70 rounded-xl border border-slate-100 p-3 space-y-1.5 text-xs">
+                        <div className="font-black text-slate-700 text-[11px]">الأصناف المطلوبة ({ord.items.length}):</div>
+                        {ord.items.map((it, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-[11px] text-slate-700 border-b border-slate-100 last:border-0 pb-1 last:pb-0">
+                            <span className="font-bold">
+                              • {it.productName} {it.selectedOption ? `(${it.selectedOption})` : ''} × {it.quantity}
+                            </span>
+                            <span className="font-black text-slate-900">EGP {it.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between text-xs font-bold pt-2 border-t border-slate-100">
                       <div className="text-slate-500">
@@ -1109,15 +1327,26 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 5: CATEGORIES MANAGER */}
+        {/* TAB 5: CATEGORIES MANAGER (Add, Edit & Delete) */}
         {adminSubTab === 'categories' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
-              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                <FolderTree className="w-4 h-4 text-blue-600" />
-                <span>إضافة قسم / تصنيف جديد للمحل</span>
-              </h3>
+            <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 h-fit">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <FolderTree className="w-4 h-4 text-blue-600" />
+                  <span>{editingCategoryId ? 'تعديل بيانات القسم' : 'إضافة قسم / تصنيف جديد'}</span>
+                </h3>
+                {editingCategoryId && (
+                  <button
+                    type="button"
+                    onClick={handleCancelCategoryEdit}
+                    className="text-[11px] font-bold text-rose-600 hover:underline"
+                  >
+                    إلغاء التعديل
+                  </button>
+                )}
+              </div>
 
               <form onSubmit={handleAddCategorySubmit} className="space-y-3 text-xs">
                 <div>
@@ -1144,21 +1373,40 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">رابط صورة القسم (URL)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700">صورة القسم (رابط أو رفع من جهازك)</label>
+                    <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200">
+                      <Upload className="w-3 h-3" />
+                      <span>{isCompressingImage ? 'جاري...' : 'رفع صورة'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCategoryFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                   <input
-                    type="url"
+                    type="text"
                     value={newCatImage}
                     onChange={(e) => setNewCatImage(e.target.value)}
-                    placeholder="https://..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    placeholder="https://... أو ارفع صورة من الجهاز"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
                   />
+                  {newCatImage && (
+                    <img
+                      src={newCatImage}
+                      alt="معاينة القسم"
+                      className="w-16 h-16 rounded-full object-cover border border-slate-200 mt-2 mx-auto"
+                    />
+                  )}
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow"
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow"
                 >
-                  إضافة القسم الآن
+                  {editingCategoryId ? 'حفظ تعديلات القسم' : 'إضافة القسم الآن'}
                 </button>
               </form>
             </div>
@@ -1177,7 +1425,7 @@ export const AdminDashboard: React.FC = () => {
                         <img
                           src={cat.image}
                           alt={cat.name}
-                          className="w-12 h-12 rounded-xl object-cover border border-slate-200"
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
                         />
                         <div>
                           <div className="font-bold text-slate-900 text-xs sm:text-sm">{cat.name}</div>
@@ -1186,17 +1434,26 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          if (confirm(`هل أنت متأكد من حذف قسم: ${cat.name}؟`)) {
-                            deleteCategory(cat.id);
-                          }
-                        }}
-                        className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                        title="حذف القسم"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleEditCategoryStart(cat)}
+                          className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          title="تعديل القسم"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`هل أنت متأكد من حذف قسم: ${cat.name}؟`)) {
+                              deleteCategory(cat.id);
+                            }
+                          }}
+                          className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                          title="حذف القسم"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1206,16 +1463,286 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 6: COMPREHENSIVE STORE SETTINGS (العنوان الجديد والأرقام المعتمدة) */}
+        {/* TAB 5B: SITE CONTENT (FEATURES & PARTNER BRANDS) */}
+        {adminSubTab === 'site_content' && (
+          <div className="space-y-6">
+            {/* Store Features / ValueProps Manager */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 h-fit">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span>{editingFeatureId ? 'تعديل بطاقة ميزة' : 'إضافة ميزة للمتجر'}</span>
+                  </h3>
+                  {editingFeatureId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFeatureId(null);
+                        setFeatureForm({ title: '', subtitle: '', iconName: 'ShieldCheck', colorTheme: 'blue' });
+                      }}
+                      className="text-[11px] font-bold text-rose-600 hover:underline"
+                    >
+                      إلغاء
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveFeature} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">عنوان الميزة *</label>
+                    <input
+                      type="text"
+                      required
+                      value={featureForm.title}
+                      onChange={(e) => setFeatureForm({ ...featureForm, title: e.target.value })}
+                      placeholder="مثال: توصيل سريع لكل مصر"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الوصف المختصر *</label>
+                    <input
+                      type="text"
+                      required
+                      value={featureForm.subtitle}
+                      onChange={(e) => setFeatureForm({ ...featureForm, subtitle: e.target.value })}
+                      placeholder="مثال: شحن آمن حتى باب موقعك أو ورشتك"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">الأيقونة</label>
+                      <select
+                        value={featureForm.iconName}
+                        onChange={(e) => setFeatureForm({ ...featureForm, iconName: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                      >
+                        <option value="ShieldCheck">درع الضمان</option>
+                        <option value="CreditCard">بطاقة دفع</option>
+                        <option value="PackageCheck">شحن وتوصيل</option>
+                        <option value="Truck">عربة شحن</option>
+                        <option value="Headphones">دعم واستشارة</option>
+                        <option value="Wrench">عدد ومعدات</option>
+                        <option value="Star">نجمة جودة</option>
+                        <option value="Clock">سرعة والتزام</option>
+                        <option value="Sparkles">عرض مميز</option>
+                        <option value="Award">توكيل معتمد</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">لون الأيقونة</label>
+                      <select
+                        value={featureForm.colorTheme}
+                        onChange={(e) => setFeatureForm({ ...featureForm, colorTheme: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                      >
+                        <option value="blue">أزرق</option>
+                        <option value="amber">ذهبي</option>
+                        <option value="emerald">أخضر</option>
+                        <option value="indigo">كحلي</option>
+                        <option value="rose">أحمر</option>
+                        <option value="teal">تركواز</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow"
+                  >
+                    {editingFeatureId ? 'حفظ تعديلات الميزة' : 'إضافة الميزة للواجهة'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+                <h3 className="text-sm font-black text-slate-900">
+                  بطاقات مميزات المتجر في الصفحة الرئيسية ({features.length})
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {features.map((ft) => (
+                    <div key={ft.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-black text-slate-900 text-xs">{ft.title}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{ft.subtitle}</div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleEditFeatureStart(ft)}
+                          className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                          title="تعديل"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`حذف الميزة: ${ft.title}؟`)) deleteFeature(ft.id);
+                          }}
+                          className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
+                          title="حذف"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Partner Brands Manager */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 h-fit">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <Award className="w-4 h-4 text-blue-600" />
+                    <span>{editingBrandId ? 'تعديل علامة تجارية' : 'إضافة ماركة / توكيل جديد'}</span>
+                  </h3>
+                  {editingBrandId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingBrandId(null);
+                        setBrandForm({ name: '', label: '', color: 'blue', logoUrl: '' });
+                      }}
+                      className="text-[11px] font-bold text-rose-600 hover:underline"
+                    >
+                      إلغاء
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveBrand} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">اسم الماركة بالإنجليزية أو المختصر *</label>
+                    <input
+                      type="text"
+                      required
+                      value={brandForm.name}
+                      onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })}
+                      placeholder="مثال: BOSCH أو TOTAL أو JOTUN"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الوصف بالعربية *</label>
+                    <input
+                      type="text"
+                      required
+                      value={brandForm.label}
+                      onChange={(e) => setBrandForm({ ...brandForm, label: e.target.value })}
+                      placeholder="مثال: بوش الألمانية للعدد"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">لون الاسم</label>
+                    <select
+                      value={brandForm.color}
+                      onChange={(e) => setBrandForm({ ...brandForm, color: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    >
+                      <option value="blue">أزرق</option>
+                      <option value="sky">سماوي</option>
+                      <option value="red">أحمر</option>
+                      <option value="orange">برتقالي</option>
+                      <option value="green">أخضر</option>
+                      <option value="emerald">أخضر غامق</option>
+                      <option value="indigo">كحلي</option>
+                      <option value="slate">داكن</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">شعار صورة للماركة (اختياري)</label>
+                      <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200">
+                        <Upload className="w-3 h-3" />
+                        <span>رفع شعار</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleBrandLogoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      value={brandForm.logoUrl}
+                      onChange={(e) => setBrandForm({ ...brandForm, logoUrl: e.target.value })}
+                      placeholder="اتركه فارغاً لعرض الاسم النصي"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow"
+                  >
+                    {editingBrandId ? 'حفظ تعديلات الماركة' : 'إضافة العلامة التجارية'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+                <h3 className="text-sm font-black text-slate-900">
+                  العلامات التجارية وشركاء النجاح ({brands.length})
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {brands.map((br) => (
+                    <div key={br.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center text-center justify-between gap-2">
+                      <div>
+                        {br.logoUrl ? (
+                          <img src={br.logoUrl} alt={br.name} className="h-8 object-contain mx-auto mb-1" />
+                        ) : (
+                          <div className="font-black text-sm text-slate-900 font-mono">{br.name}</div>
+                        )}
+                        <div className="text-[11px] text-slate-500 font-bold">{br.label}</div>
+                      </div>
+                      <div className="flex items-center gap-1 pt-1 border-t border-slate-200/70 w-full justify-center">
+                        <button
+                          onClick={() => handleEditBrandStart(br)}
+                          className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                          title="تعديل"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`حذف الماركة: ${br.name}؟`)) deleteBrand(br.id);
+                          }}
+                          className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
+                          title="حذف"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: COMPREHENSIVE STORE SETTINGS & SITE-WIDE TEXTS / VISIBILITY */}
         {adminSubTab === 'settings' && (
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div className="max-w-4xl mx-auto space-y-6">
             
-            <form onSubmit={handleSaveSettings} className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 shadow-sm space-y-5">
+            <form onSubmit={handleSaveSettings} className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 shadow-sm space-y-6">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
                   <Settings className="w-5 h-5 text-blue-600" />
                   <h3 className="text-base font-black text-slate-900">
-                    كافة إعدادات المتجر وبيانات التواصل المعتمدة
+                    إعدادات المتجر والتحكم الكامل في نصوص وأقسام الموقع
                   </h3>
                 </div>
 
@@ -1228,106 +1755,279 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Store Identity */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">اسم المحل الرسمي *</label>
-                  <input
-                    type="text"
-                    required
-                    value={settingsForm.storeName}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, storeName: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
-                  />
-                </div>
+              {/* Store Identity & Contact */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                  1. بيانات المحل والتواصل والشحن
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">اسم المحل الرسمي *</label>
+                    <input
+                      type="text"
+                      required
+                      value={settingsForm.storeName}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, storeName: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">الوصف الفرعي للمحل *</label>
-                  <input
-                    type="text"
-                    required
-                    value={settingsForm.storeSubtitle}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, storeSubtitle: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
-                  />
-                </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الوصف الفرعي للمحل *</label>
+                    <input
+                      type="text"
+                      required
+                      value={settingsForm.storeSubtitle}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, storeSubtitle: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">رقم الهاتف الأساسي *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={settingsForm.phoneNumber}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, phoneNumber: e.target.value })}
-                    dir="ltr"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-right"
-                  />
-                </div>
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700 block mb-1">شريط إعلان أو تنبيه أعلى الموقع (اختياري — اتركه فارغاً لإخفائه)</label>
+                    <input
+                      type="text"
+                      value={settingsForm.announcementNotice || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, announcementNotice: e.target.value })}
+                      placeholder="مثال: خصم 15% طوال الأسبوع على جميع العدد الكهربائية والشحن مجاني فوق 1000 ج"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">رقم الهاتف الثاني *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={settingsForm.phoneNumber2}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, phoneNumber2: e.target.value })}
-                    dir="ltr"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-right"
-                  />
-                </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">رقم الهاتف الأساسي *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={settingsForm.phoneNumber}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, phoneNumber: e.target.value })}
+                      dir="ltr"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-right"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">رقم الواتساب الرسمي للطلبات *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={settingsForm.whatsappNumber}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, whatsappNumber: e.target.value })}
-                    dir="ltr"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-right"
-                  />
-                  <span className="text-[10px] text-slate-400">بكود مصر: 201029190615</span>
-                </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">رقم الهاتف الثاني *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={settingsForm.phoneNumber2}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, phoneNumber2: e.target.value })}
+                      dir="ltr"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-right"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">مواعيد وساعات العمل *</label>
-                  <input
-                    type="text"
-                    value={settingsForm.workingHours}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, workingHours: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
-                  />
-                </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">رقم الواتساب الرسمي للطلبات *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={settingsForm.whatsappNumber}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, whatsappNumber: e.target.value })}
+                      dir="ltr"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-right"
+                    />
+                    <span className="text-[10px] text-slate-400">بكود مصر: 201029190615</span>
+                  </div>
 
-                <div className="sm:col-span-2">
-                  <label className="font-bold text-slate-700 block mb-1">عنوان المحل الرسمي والمعتمد *</label>
-                  <input
-                    type="text"
-                    required
-                    value={settingsForm.address}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-slate-900"
-                  />
-                </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">مواعيد وساعات العمل *</label>
+                    <input
+                      type="text"
+                      value={settingsForm.workingHours}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, workingHours: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">سعر الشحن والتوصيل الافتراضي (EGP)</label>
-                  <input
-                    type="number"
-                    value={settingsForm.deliveryFee}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, deliveryFee: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
-                  />
-                </div>
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700 block mb-1">عنوان المحل الرسمي والمعتمد *</label>
+                    <input
+                      type="text"
+                      required
+                      value={settingsForm.address}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-slate-900"
+                    />
+                  </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">الحد الأدنى للشحن المجاني (EGP)</label>
-                  <input
-                    type="number"
-                    value={settingsForm.freeDeliveryThreshold}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, freeDeliveryThreshold: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
-                  />
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">سعر الشحن والتوصيل الافتراضي (EGP)</label>
+                    <input
+                      type="number"
+                      value={settingsForm.deliveryFee}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, deliveryFee: Number(e.target.value) })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الحد الأدنى للشحن المجاني (EGP)</label>
+                    <input
+                      type="number"
+                      value={settingsForm.freeDeliveryThreshold}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, freeDeliveryThreshold: Number(e.target.value) })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">رابط فيسبوك (اختياري)</label>
+                    <input
+                      type="url"
+                      value={settingsForm.facebookUrl || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, facebookUrl: e.target.value })}
+                      dir="ltr"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">رابط الخريطة Google Maps (اختياري)</label>
+                    <input
+                      type="url"
+                      value={settingsForm.locationMapUrl || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, locationMapUrl: e.target.value })}
+                      dir="ltr"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Homepage Section Texts */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <h4 className="text-xs font-black text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                  2. تعديل عناوين ونصوص أقسام الصفحة الرئيسية والفوتر
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">عنوان قسم الأقسام الرئيسية</label>
+                    <input
+                      type="text"
+                      value={settingsForm.categoriesTitle || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, categoriesTitle: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الوصف أسفل عنوان الأقسام</label>
+                    <input
+                      type="text"
+                      value={settingsForm.categoriesSubtitle || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, categoriesSubtitle: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">عنوان قسم المنتجات والمعروضات</label>
+                    <input
+                      type="text"
+                      value={settingsForm.productsTitle || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, productsTitle: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">عنوان قسم العلامات التجارية</label>
+                    <input
+                      type="text"
+                      value={settingsForm.brandsTitle || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, brandsTitle: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700 block mb-1">الوصف أسفل العلامات التجارية</label>
+                    <input
+                      type="text"
+                      value={settingsForm.brandsSubtitle || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, brandsSubtitle: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">شارة قسم التواصل</label>
+                    <input
+                      type="text"
+                      value={settingsForm.contactBadge || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, contactBadge: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">عنوان قسم التواصل</label>
+                    <input
+                      type="text"
+                      value={settingsForm.contactTitle || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, contactTitle: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700 block mb-1">نص وصف قسم التواصل</label>
+                    <textarea
+                      rows={2}
+                      value={settingsForm.contactDescription || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, contactDescription: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700 block mb-1">النبذة التعريفية في أسفل الموقع (Footer)</label>
+                    <textarea
+                      rows={2}
+                      value={settingsForm.footerBio || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, footerBio: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section Visibility Controls */}
+              <div className="space-y-3 pt-2 border-t border-slate-100">
+                <h4 className="text-xs font-black text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5">
+                  <Eye className="w-4 h-4" />
+                  <span>3. إظهار أو إخفاء أقسام الواجهة الرئيسية</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
+                  {[
+                    { key: 'showHeroBanner', label: 'قسم البنرات الرئيسية (Hero)' },
+                    { key: 'showValueProps', label: 'بطاقات مميزات المتجر' },
+                    { key: 'showActionCards', label: 'بطاقات الفلاتر السريعة' },
+                    { key: 'showCategories', label: 'دوائر الأقسام الرئيسية' },
+                    { key: 'showBrands', label: 'قسم العلامات التجارية' },
+                    { key: 'showContactSection', label: 'قسم التواصل والرسائل' },
+                    { key: 'showPaintStudio', label: 'أداة كمبيوتر الألوان' }
+                  ].map((item) => {
+                    const checked = settingsForm[item.key as keyof typeof settingsForm] !== false;
+                    return (
+                      <label
+                        key={item.key}
+                        className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer hover:border-blue-300"
+                      >
+                        <span className="font-bold text-slate-800">{item.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) =>
+                            setSettingsForm({ ...settingsForm, [item.key]: e.target.checked })
+                          }
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1337,7 +2037,7 @@ export const AdminDashboard: React.FC = () => {
                   className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow"
                 >
                   <Save className="w-4 h-4" />
-                  <span>تطبيق وحفظ كافة الإعدادات فوراً</span>
+                  <span>تطبيق وحفظ كافة التعديلات فوراً</span>
                 </button>
               </div>
             </form>
@@ -1345,24 +2045,24 @@ export const AdminDashboard: React.FC = () => {
             {/* Reset / Backup Card */}
             <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex items-center justify-between gap-4">
               <div>
-                <h4 className="text-xs font-black text-slate-900">إعادة تعيين البيانات للوضع الافتراضي</h4>
+                <h4 className="text-xs font-black text-slate-900">استعادة الإعدادات والأقسام الافتراضية</h4>
                 <p className="text-[11px] text-slate-500">
-                  استعادة الكتالوج المعتمد الأصلي لمتجر الموان.
+                  يستعيد الأقسام والبنرات وإعدادات التواصل الأساسية فقط دون المساس بمنتجاتك التي أضفتها.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm('هل ترغب في استعادة البيانات الأصلية للمتجر؟')) {
+                  if (confirm('هل ترغب في استعادة الإعدادات والأقسام الأساسية للمتجر؟')) {
                     resetAllData();
                     setSettingsForm({ ...settings });
                   }
                 }}
-                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>استعادة البيانات</span>
+                <span>استعادة الإعدادات</span>
               </button>
             </div>
 
@@ -1662,17 +2362,45 @@ export const AdminDashboard: React.FC = () => {
                     placeholder="https://... أو ارفع صورة"
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  {productForm.image && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <img
+                        src={productForm.image}
+                        alt="معاينة المنتج"
+                        className="w-12 h-12 rounded-lg object-contain bg-slate-100 border border-slate-200 p-0.5"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setProductForm({ ...productForm, image: '' })}
+                        className="text-[11px] text-rose-600 font-bold hover:underline"
+                      >
+                        مسح الصورة
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">وحدة البيع</label>
-                  <input
-                    type="text"
-                    value={productForm.unit}
-                    onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}
-                    placeholder="قطعة، طقم، بستلة 9 لتر، متر..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">وحدة البيع</label>
+                    <input
+                      type="text"
+                      value={productForm.unit}
+                      onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}
+                      placeholder="قطعة، طقم، بستلة..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الكمية بالمخزن</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={productForm.stockCount}
+                      onChange={(e) => setProductForm({ ...productForm, stockCount: Number(e.target.value) })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1712,6 +2440,66 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
+              {/* Specs Editor */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800">المواصفات الفنية للمنتج (اختياري)</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setProductForm((prev) => ({
+                        ...prev,
+                        specs: [...prev.specs, { label: '', value: '' }]
+                      }))
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-200 flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>إضافة مواصفة</span>
+                  </button>
+                </div>
+
+                {productForm.specs.map((sp, idx) => (
+                  <div key={idx} className="grid grid-cols-11 gap-2 items-center">
+                    <input
+                      type="text"
+                      value={sp.label}
+                      onChange={(e) => {
+                        const updated = [...productForm.specs];
+                        updated[idx] = { ...updated[idx], label: e.target.value };
+                        setProductForm({ ...productForm, specs: updated });
+                      }}
+                      placeholder="المواصفة (مثال: القدرة)"
+                      className="col-span-5 bg-white border border-slate-300 rounded-lg p-2 text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={sp.value}
+                      onChange={(e) => {
+                        const updated = [...productForm.specs];
+                        updated[idx] = { ...updated[idx], value: e.target.value };
+                        setProductForm({ ...productForm, specs: updated });
+                      }}
+                      placeholder="القيمة (مثال: 650 وات)"
+                      className="col-span-5 bg-white border border-slate-300 rounded-lg p-2 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductForm((prev) => ({
+                          ...prev,
+                          specs: prev.specs.filter((_, i) => i !== idx)
+                        }));
+                      }}
+                      className="col-span-1 p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center"
+                      title="حذف"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
               <div>
                 <label className="font-bold text-slate-700 block mb-1">وصف المنتج ومميزاته *</label>
                 <textarea
@@ -1719,11 +2507,12 @@ export const AdminDashboard: React.FC = () => {
                   required
                   value={productForm.description}
                   onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                  placeholder="اكتب وصفاً واضحاً للمنتج واستخداماته وضمانه..."
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
-              <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
                   <input
                     type="checkbox"
@@ -1731,7 +2520,37 @@ export const AdminDashboard: React.FC = () => {
                     onChange={(e) => setProductForm({ ...productForm, inStock: e.target.checked })}
                     className="w-4 h-4 text-blue-600 rounded"
                   />
-                  <span>متوفر بالمخزن وجاهز للشحن</span>
+                  <span>متوفر بالمخزن</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={productForm.isFeatured}
+                    onChange={(e) => setProductForm({ ...productForm, isFeatured: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span>منتج مميز</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={productForm.isNew}
+                    onChange={(e) => setProductForm({ ...productForm, isNew: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span>وصل حديثاً</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={productForm.isBestSeller}
+                    onChange={(e) => setProductForm({ ...productForm, isBestSeller: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span>الأكثر مبيعاً</span>
                 </label>
               </div>
 

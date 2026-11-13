@@ -41,7 +41,11 @@ service cloud.firestore {
         data.keys().hasOnly([
           'storeName', 'storeSubtitle', 'announcementNotice', 'phoneNumber', 'phoneNumber2',
           'whatsappNumber', 'address', 'workingHours', 'deliveryFee', 'freeDeliveryThreshold',
-          'currency', 'facebookUrl', 'locationMapUrl', 'commercialReg', 'taxNumber', 'updatedAt'
+          'currency', 'facebookUrl', 'locationMapUrl', 'commercialReg', 'taxNumber',
+          'categoriesTitle', 'categoriesSubtitle', 'productsTitle', 'brandsTitle', 'brandsSubtitle',
+          'contactBadge', 'contactTitle', 'contactDescription', 'footerBio',
+          'showHeroBanner', 'showValueProps', 'showActionCards', 'showCategories',
+          'showBrands', 'showContactSection', 'showPaintStudio', 'updatedAt'
         ]) &&
         data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 150 &&
         (!('storeSubtitle' in data) || (data.storeSubtitle is string && data.storeSubtitle.size() <= 300)) &&
@@ -58,6 +62,22 @@ service cloud.firestore {
         (!('locationMapUrl' in data) || (data.locationMapUrl is string && data.locationMapUrl.size() <= 500)) &&
         (!('commercialReg' in data) || (data.commercialReg is string && data.commercialReg.size() <= 50)) &&
         (!('taxNumber' in data) || (data.taxNumber is string && data.taxNumber.size() <= 50)) &&
+        (!('categoriesTitle' in data) || (data.categoriesTitle is string && data.categoriesTitle.size() <= 150)) &&
+        (!('categoriesSubtitle' in data) || (data.categoriesSubtitle is string && data.categoriesSubtitle.size() <= 250)) &&
+        (!('productsTitle' in data) || (data.productsTitle is string && data.productsTitle.size() <= 150)) &&
+        (!('brandsTitle' in data) || (data.brandsTitle is string && data.brandsTitle.size() <= 150)) &&
+        (!('brandsSubtitle' in data) || (data.brandsSubtitle is string && data.brandsSubtitle.size() <= 250)) &&
+        (!('contactBadge' in data) || (data.contactBadge is string && data.contactBadge.size() <= 100)) &&
+        (!('contactTitle' in data) || (data.contactTitle is string && data.contactTitle.size() <= 180)) &&
+        (!('contactDescription' in data) || (data.contactDescription is string && data.contactDescription.size() <= 500)) &&
+        (!('footerBio' in data) || (data.footerBio is string && data.footerBio.size() <= 500)) &&
+        (!('showHeroBanner' in data) || data.showHeroBanner is bool) &&
+        (!('showValueProps' in data) || data.showValueProps is bool) &&
+        (!('showActionCards' in data) || data.showActionCards is bool) &&
+        (!('showCategories' in data) || data.showCategories is bool) &&
+        (!('showBrands' in data) || data.showBrands is bool) &&
+        (!('showContactSection' in data) || data.showContactSection is bool) &&
+        (!('showPaintStudio' in data) || data.showPaintStudio is bool) &&
         (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
     }
 
@@ -89,6 +109,28 @@ service cloud.firestore {
         (!('description' in data) || (data.description is string && data.description.size() <= 400)) &&
         data.image is string && data.image.size() >= 5 && data.image.size() <= 150000 &&
         (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 0));
+    }
+
+    function isValidBrand(data) {
+      return data.keys().hasAll(['name', 'label']) &&
+        data.keys().hasOnly(['id', 'name', 'label', 'color', 'logoUrl', 'sortOrder']) &&
+        (!('id' in data) || isValidId(data.id)) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+        data.label is string && data.label.size() >= 1 && data.label.size() <= 100 &&
+        (!('color' in data) || (data.color is string && data.color.size() <= 60)) &&
+        (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 150000)) &&
+        (!('sortOrder' in data) || data.sortOrder is number);
+    }
+
+    function isValidFeature(data) {
+      return data.keys().hasAll(['title', 'subtitle', 'iconName', 'colorTheme']) &&
+        data.keys().hasOnly(['id', 'title', 'subtitle', 'iconName', 'colorTheme', 'sortOrder']) &&
+        (!('id' in data) || isValidId(data.id)) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 100 &&
+        data.subtitle is string && data.subtitle.size() >= 2 && data.subtitle.size() <= 200 &&
+        data.iconName is string && data.iconName.size() >= 1 && data.iconName.size() <= 40 &&
+        data.colorTheme is string && data.colorTheme.size() >= 1 && data.colorTheme.size() <= 40 &&
+        (!('sortOrder' in data) || data.sortOrder is number);
     }
 
     function isValidProduct(data) {
@@ -200,6 +242,22 @@ service cloud.firestore {
       allow create: if isAdmin() && isValidId(categoryId) && isValidCategory(incoming());
       allow update: if isAdmin() && isValidId(categoryId) && isValidCategory(incoming());
       allow delete: if isAdmin() && isValidId(categoryId);
+    }
+
+    match /brands/{brandId} {
+      allow get: if isValidId(brandId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(brandId) && isValidBrand(incoming());
+      allow update: if isAdmin() && isValidId(brandId) && isValidBrand(incoming());
+      allow delete: if isAdmin() && isValidId(brandId);
+    }
+
+    match /features/{featureId} {
+      allow get: if isValidId(featureId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(featureId) && isValidFeature(incoming());
+      allow update: if isAdmin() && isValidId(featureId) && isValidFeature(incoming());
+      allow delete: if isAdmin() && isValidId(featureId);
     }
 
     match /products/{productId} {

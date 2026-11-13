@@ -55,6 +55,24 @@ export interface Category {
   itemCount?: number;
 }
 
+export interface StoreBrand {
+  id: string;
+  name: string;
+  label: string;
+  color?: string;
+  logoUrl?: string;
+  sortOrder?: number;
+}
+
+export interface StoreFeature {
+  id: string;
+  title: string;
+  subtitle: string;
+  iconName: string;
+  colorTheme: string;
+  sortOrder?: number;
+}
+
 export interface BannerSlide {
   id: string;
   badge?: string;
@@ -137,6 +155,22 @@ export interface StoreSettings {
   currency: string;
   facebookUrl?: string;
   locationMapUrl?: string;
+  categoriesTitle?: string;
+  categoriesSubtitle?: string;
+  productsTitle?: string;
+  brandsTitle?: string;
+  brandsSubtitle?: string;
+  contactBadge?: string;
+  contactTitle?: string;
+  contactDescription?: string;
+  footerBio?: string;
+  showHeroBanner?: boolean;
+  showValueProps?: boolean;
+  showActionCards?: boolean;
+  showCategories?: boolean;
+  showBrands?: boolean;
+  showContactSection?: boolean;
+  showPaintStudio?: boolean;
   taxNumber?: string;
   commercialReg?: string;
   updatedAt?: string;

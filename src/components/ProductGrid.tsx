@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
-import { Filter, SlidersHorizontal, ArrowUpDown, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowUpDown, AlertCircle, PackagePlus, MessageSquare, Phone } from 'lucide-react';
 
 export const ProductGrid: React.FC = () => {
   const {
     products,
+    settings,
     hasMoreProducts,
     loadMoreProducts,
     categories,
@@ -14,7 +15,10 @@ export const ProductGrid: React.FC = () => {
     searchQuery,
     setSearchQuery,
     selectedFilter,
-    setSelectedFilter
+    setSelectedFilter,
+    isOwnerAuthenticated,
+    setActiveView,
+    setAdminSubTab
   } = useStore();
 
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'name'>('featured');
@@ -80,11 +84,13 @@ export const ProductGrid: React.FC = () => {
                   ? 'أحدث المنتجات التي وصلت المحل'
                   : selectedFilter === 'bestsellers'
                   ? 'المنتجات الأكثر طلباً ومبيعاً'
-                  : 'كافة المعروضات ولوازم المعمار'}
+                  : settings.productsTitle || 'كافة المعروضات ولوازم المعمار'}
               </h2>
             </div>
             <p className="text-xs text-slate-600 mt-1 mr-4">
-              إجمالي المنتجات المعروضة: {filteredProducts.length} صنف متوفر في المخزن
+              {products.length > 0
+                ? `إجمالي المنتجات المعروضة: ${filteredProducts.length} صنف`
+                : 'المتجر جاهز لاستقبال المنتجات الحقيقية من المالك'}
             </p>
           </div>
 
@@ -96,7 +102,7 @@ export const ProductGrid: React.FC = () => {
             </div>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e) => setSortBy(e.target.value as 'featured' | 'price-asc' | 'price-desc' | 'name')}
               className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="featured">المميز والأكثر تطابقاً</option>
@@ -181,6 +187,47 @@ export const ProductGrid: React.FC = () => {
             </div>
           )}
         </>
+      ) : products.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 text-center max-w-xl mx-auto shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-4 border border-blue-100">
+            <PackagePlus className="w-8 h-8" />
+          </div>
+          <h3 className="text-base sm:text-lg font-black text-slate-900 mb-2">
+            جاري تجهيز وإضافة منتجات {settings.storeName}
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-5">
+            نقوم حالياً بإضافة أحدث العدد والمعدات والبويات ولوازم المعمار بأسعارها الحقيقية المحدثة. يمكنك التواصل معنا مباشرة الآن للاستفسار أو الطلب الفوري.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {isOwnerAuthenticated && (
+              <button
+                onClick={() => {
+                  setAdminSubTab('products');
+                  setActiveView('admin');
+                }}
+                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow transition-all"
+              >
+                إضافة أول منتج من لوحة المالك
+              </button>
+            )}
+            <a
+              href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent(`السلام عليكم ${settings.storeName}، أريد الاستفسار عن توفر منتجات وأسعار`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow flex items-center gap-1.5 transition-colors"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>اطلب عبر واتساب</span>
+            </a>
+            <a
+              href={`tel:${settings.phoneNumber || '01008377405'}`}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow flex items-center gap-1.5 transition-colors"
+            >
+              <Phone className="w-4 h-4" />
+              <span>اتصل بنا</span>
+            </a>
+          </div>
+        </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center max-w-lg mx-auto">
           <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />

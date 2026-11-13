@@ -33,7 +33,7 @@ export const Footer: React.FC = () => {
               </span>
             </div>
             <p className="text-slate-400 leading-relaxed">
-              {settings.storeSubtitle}. نوفر لعملائنا نخب أول من العدد اليدوية والكهربائية ومستلزمات الهواء والدهانات الأصلية مع خلط ألوان دقيق بالكمبيوتر.
+              {settings.storeSubtitle}. {settings.footerBio || 'نوفر لعملائنا نخب أول من العدد اليدوية والكهربائية ومستلزمات الهواء والدهانات الأصلية مع خلط ألوان دقيق بالكمبيوتر.'}
             </p>
           </div>
 
@@ -57,14 +57,16 @@ export const Footer: React.FC = () => {
                   </button>
                 </li>
               ))}
-              <li>
-                <button
-                  onClick={() => setIsPaintStudioOpen(true)}
-                  className="text-teal-300 font-bold hover:underline"
-                >
-                  • استوديو تلوين الكمبيوتر الفوري
-                </button>
-              </li>
+              {settings.showPaintStudio !== false && (
+                <li>
+                  <button
+                    onClick={() => setIsPaintStudioOpen(true)}
+                    className="text-teal-300 font-bold hover:underline"
+                  >
+                    • استوديو تلوين الكمبيوتر الفوري
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
 

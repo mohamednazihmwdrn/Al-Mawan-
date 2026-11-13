@@ -9,6 +9,7 @@ import {
   query,
   orderBy,
   limit,
+  getDoc,
   getDocs,
   writeBatch,
   Unsubscribe
@@ -28,13 +29,17 @@ import {
   Order,
   StoreSettings,
   OrderStatus,
-  BannerSlide
+  BannerSlide,
+  StoreBrand,
+  StoreFeature
 } from '../types/store';
 import {
-  INITIAL_PRODUCTS,
   INITIAL_CATEGORIES,
   INITIAL_SETTINGS,
-  INITIAL_BANNERS
+  INITIAL_BANNERS,
+  INITIAL_BRANDS,
+  INITIAL_FEATURES,
+  LEGACY_DEMO_PRODUCT_IDS
 } from '../data/initialData';
 import {
   db,
@@ -53,6 +58,7 @@ export type AdminSubTab =
   | 'inquiries'
   | 'categories'
   | 'banners'
+  | 'site_content'
   | 'settings';
 
 interface StoreContextType {
@@ -100,6 +106,7 @@ interface StoreContextType {
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
   updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
+  clearAllProducts: () => Promise<void>;
   toggleStock: (id: string) => Promise<void>;
 
   // Reviews
@@ -116,7 +123,20 @@ interface StoreContextType {
   // Categories
   categories: Category[];
   addCategory: (category: Omit<Category, 'id'>) => Promise<void>;
+  updateCategory: (id: string, category: Partial<Category>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
+
+  // Brands
+  brands: StoreBrand[];
+  addBrand: (brand: Omit<StoreBrand, 'id'>) => Promise<void>;
+  updateBrand: (id: string, brand: Partial<StoreBrand>) => Promise<void>;
+  deleteBrand: (id: string) => Promise<void>;
+
+  // Features (Value Props)
+  features: StoreFeature[];
+  addFeature: (feature: Omit<StoreFeature, 'id'>) => Promise<void>;
+  updateFeature: (id: string, feature: Partial<StoreFeature>) => Promise<void>;
+  deleteFeature: (id: string) => Promise<void>;
 
   // Navigation & Search
   selectedCategoryId: string | null;
@@ -207,8 +227,22 @@ function buildSettingsPayload(s: StoreSettings): Record<string, unknown> {
   if (s.workingHours !== undefined) payload.workingHours = String(s.workingHours).slice(0, 150);
   if (s.facebookUrl !== undefined) payload.facebookUrl = String(s.facebookUrl).slice(0, 300);
   if (s.locationMapUrl !== undefined) payload.locationMapUrl = String(s.locationMapUrl).slice(0, 500);
-  if (s.commercialReg !== undefined) payload.commercialReg = String(s.commercialReg).slice(0, 50);
-  if (s.taxNumber !== undefined) payload.taxNumber = String(s.taxNumber).slice(0, 50);
+  if (s.categoriesTitle !== undefined) payload.categoriesTitle = String(s.categoriesTitle).slice(0, 150);
+  if (s.categoriesSubtitle !== undefined) payload.categoriesSubtitle = String(s.categoriesSubtitle).slice(0, 250);
+  if (s.productsTitle !== undefined) payload.productsTitle = String(s.productsTitle).slice(0, 150);
+  if (s.brandsTitle !== undefined) payload.brandsTitle = String(s.brandsTitle).slice(0, 150);
+  if (s.brandsSubtitle !== undefined) payload.brandsSubtitle = String(s.brandsSubtitle).slice(0, 250);
+  if (s.contactBadge !== undefined) payload.contactBadge = String(s.contactBadge).slice(0, 100);
+  if (s.contactTitle !== undefined) payload.contactTitle = String(s.contactTitle).slice(0, 180);
+  if (s.contactDescription !== undefined) payload.contactDescription = String(s.contactDescription).slice(0, 500);
+  if (s.footerBio !== undefined) payload.footerBio = String(s.footerBio).slice(0, 500);
+  if (typeof s.showHeroBanner === 'boolean') payload.showHeroBanner = s.showHeroBanner;
+  if (typeof s.showValueProps === 'boolean') payload.showValueProps = s.showValueProps;
+  if (typeof s.showActionCards === 'boolean') payload.showActionCards = s.showActionCards;
+  if (typeof s.showCategories === 'boolean') payload.showCategories = s.showCategories;
+  if (typeof s.showBrands === 'boolean') payload.showBrands = s.showBrands;
+  if (typeof s.showContactSection === 'boolean') payload.showContactSection = s.showContactSection;
+  if (typeof s.showPaintStudio === 'boolean') payload.showPaintStudio = s.showPaintStudio;
   return payload;
 }
 
@@ -239,6 +273,29 @@ function buildCategoryPayload(c: Category): Record<string, unknown> {
   if (c.description) payload.description = String(c.description).slice(0, 400);
   if (typeof c.itemCount === 'number' && c.itemCount >= 0) payload.itemCount = c.itemCount;
   return payload;
+}
+
+function buildBrandPayload(b: StoreBrand, index = 0): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    id: sanitizeId(b.id),
+    name: String(b.name).trim().slice(0, 80),
+    label: String(b.label).trim().slice(0, 100),
+    sortOrder: typeof b.sortOrder === 'number' ? b.sortOrder : index
+  };
+  if (b.color) payload.color = String(b.color).trim().slice(0, 60);
+  if (b.logoUrl && b.logoUrl.trim()) payload.logoUrl = String(b.logoUrl).trim().slice(0, 150000);
+  return payload;
+}
+
+function buildFeaturePayload(f: StoreFeature, index = 0): Record<string, unknown> {
+  return {
+    id: sanitizeId(f.id),
+    title: String(f.title).trim().slice(0, 100),
+    subtitle: String(f.subtitle).trim().slice(0, 200),
+    iconName: String(f.iconName || 'ShieldCheck').trim().slice(0, 40),
+    colorTheme: String(f.colorTheme || 'blue').trim().slice(0, 40),
+    sortOrder: typeof f.sortOrder === 'number' ? f.sortOrder : index
+  };
 }
 
 function buildProductPayload(p: Product): Record<string, unknown> {
@@ -331,20 +388,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [secretClicks, setSecretClicks] = useState(0);
   const secretClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Core Data
+  // Core Data (Products start completely clean so owner adds real inventory)
   const [settings, setSettings] = useState<StoreSettings>(INITIAL_SETTINGS);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [banners, setBanners] = useState<BannerSlide[]>(INITIAL_BANNERS);
+  const [brands, setBrands] = useState<StoreBrand[]>(INITIAL_BRANDS);
+  const [features, setFeatures] = useState<StoreFeature[]>(INITIAL_FEATURES);
   const [orders, setOrders] = useState<Order[]>([]);
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
 
   const [productLimit, setProductLimit] = useState<number>(PRODUCT_PAGE_SIZE);
   const [cloudProductCount, setCloudProductCount] = useState<number>(0);
-  const [isCloudSeeded, setIsCloudSeeded] = useState<boolean>(false);
+  const [isCloudSeeded, setIsCloudSeeded] = useState<boolean>(true);
   const [lastSyncedTime, setLastSyncedTime] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const autoSeedAttemptedRef = useRef<boolean>(false);
+  const demoCleanupAttemptedRef = useRef<boolean>(false);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -444,7 +504,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => unsub();
   }, []);
 
-  // Seed default store catalog to Firestore once when Admin logs in
+  // Seed default store structure (settings, banners, categories, brands, features — NO dummy products)
   const seedCloudDefaults = useCallback(
     async (force = false) => {
       if (!isCloudAdmin) {
@@ -455,8 +515,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIsSyncing(true);
       try {
         if (!force) {
-          const existingSnap = await getDocs(query(collection(db, 'products'), limit(1)));
-          if (!existingSnap.empty) {
+          const settingsSnap = await getDoc(doc(db, 'settings', 'store'));
+          if (settingsSnap.exists()) {
             setIsCloudSeeded(true);
             setIsSyncing(false);
             return;
@@ -478,21 +538,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           batch.set(doc(db, 'categories', sanitizeId(c.id)), buildCategoryPayload(c));
         });
 
-        // Products (staggered timestamps to keep default display order)
-        const baseTs = Date.now();
-        INITIAL_PRODUCTS.forEach((p, idx) => {
-          const productWithTime: Product = {
-            ...p,
-            createdAt: baseTs - idx * 1000,
-            updatedAt: baseTs
-          };
-          batch.set(doc(db, 'products', sanitizeId(p.id)), buildProductPayload(productWithTime));
+        // Partner Brands
+        INITIAL_BRANDS.forEach((br, idx) => {
+          batch.set(doc(db, 'brands', sanitizeId(br.id)), buildBrandPayload(br, idx));
+        });
+
+        // Store Features
+        INITIAL_FEATURES.forEach((ft, idx) => {
+          batch.set(doc(db, 'features', sanitizeId(ft.id)), buildFeaturePayload(ft, idx));
         });
 
         await batch.commit();
         setIsCloudSeeded(true);
         setLastSyncedTime(Date.now());
-        showToast('تم نشر ومزامنة الكتالوج والبيانات الافتراضية على السحابة بنجاح!');
+        showToast('تمت مزامنة إعدادات وأقسام المتجر على السحابة بنجاح!');
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, 'batch-seed');
       } finally {
@@ -502,7 +561,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [isCloudAdmin, showToast]
   );
 
-  // Auto-seed once when Cloud Admin signs in and Firestore is empty
+  // Auto-seed store settings & sections once when Cloud Admin signs in and store config is missing
   useEffect(() => {
     if (authReady && isCloudAdmin && !autoSeedAttemptedRef.current) {
       autoSeedAttemptedRef.current = true;
@@ -511,6 +570,47 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
     }
   }, [authReady, isCloudAdmin, seedCloudDefaults]);
+
+  // One-time automatic cleanup of legacy demo products (prod-1..prod-14) in live Firestore
+  useEffect(() => {
+    if (!authReady || !isCloudAdmin || demoCleanupAttemptedRef.current) return;
+    if (typeof window !== 'undefined' && localStorage.getItem('almawan_demo_cleaned_v1') === '1') {
+      demoCleanupAttemptedRef.current = true;
+      return;
+    }
+    const legacyFound = products.filter((p) => LEGACY_DEMO_PRODUCT_IDS.includes(p.id));
+    if (legacyFound.length === 0) {
+      if (products.length > 0) {
+        demoCleanupAttemptedRef.current = true;
+        try {
+          localStorage.setItem('almawan_demo_cleaned_v1', '1');
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
+    demoCleanupAttemptedRef.current = true;
+    const cleanLegacy = async () => {
+      try {
+        const batch = writeBatch(db);
+        legacyFound.forEach((p) => {
+          batch.delete(doc(db, 'products', p.id));
+        });
+        await batch.commit();
+        try {
+          localStorage.setItem('almawan_demo_cleaned_v1', '1');
+        } catch {
+          // ignore
+        }
+        showToast('تم تنظيف المنتجات التجريبية القديمة تلقائياً — يمكنك الآن إضافة منتجاتك الحقيقية.');
+      } catch (err) {
+        console.warn('Legacy demo cleanup notice:', err);
+      }
+    };
+    cleanLegacy();
+  }, [authReady, isCloudAdmin, products, showToast]);
 
   // --- Real-Time Firestore Listeners (Public Catalog) ---
 
@@ -521,8 +621,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       settingsRef,
       (snap) => {
         if (snap.exists()) {
+          setIsCloudSeeded(true);
           setSettings({ ...INITIAL_SETTINGS, ...(snap.data() as Partial<StoreSettings>) });
           setLastSyncedTime(Date.now());
+        } else {
+          setIsCloudSeeded(false);
         }
       },
       (err) => {
@@ -576,7 +679,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => unsub();
   }, []);
 
-  // 4. Products listener (Scalable paginated query)
+  // 3B. Partner Brands listener
+  useEffect(() => {
+    const q = query(collection(db, 'brands'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (!snap.empty) {
+          const loaded = snap.docs
+            .map((d) => ({ ...(d.data() as StoreBrand), id: d.id }))
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          setBrands(loaded);
+          setLastSyncedTime(Date.now());
+        } else {
+          setBrands(INITIAL_BRANDS);
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'brands');
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // 3C. Store Features listener
+  useEffect(() => {
+    const q = query(collection(db, 'features'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (!snap.empty) {
+          const loaded = snap.docs
+            .map((d) => ({ ...(d.data() as StoreFeature), id: d.id }))
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          setFeatures(loaded);
+          setLastSyncedTime(Date.now());
+        } else {
+          setFeatures(INITIAL_FEATURES);
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'features');
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // 4. Products listener (Scalable paginated query — empty by default until owner adds products)
   useEffect(() => {
     const q = query(
       collection(db, 'products'),
@@ -588,13 +737,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (snap) => {
         setCloudProductCount(snap.size);
         if (!snap.empty) {
-          setIsCloudSeeded(true);
           const loaded = snap.docs.map((d) => ({ ...(d.data() as Product), id: d.id }));
           setProducts(loaded);
           setLastSyncedTime(Date.now());
         } else {
-          setIsCloudSeeded(false);
-          setProducts(INITIAL_PRODUCTS);
+          setProducts([]);
         }
       },
       (err) => {
@@ -842,6 +989,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const clearAllProducts = async () => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    try {
+      const snap = await getDocs(collection(db, 'products'));
+      if (snap.empty) {
+        showToast('المتجر نظيف بالفعل ولا يحتوي على أي منتجات.');
+        setIsSyncing(false);
+        return;
+      }
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += 400) {
+        const batch = writeBatch(db);
+        docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+      setLastSyncedTime(Date.now());
+      showToast(`تم حذف جميع المنتجات (${docs.length}) بنجاح وتنظيف المتجر بالكامل.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'products/clear-all');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const toggleStock = async (id: string) => {
     const current = products.find((p) => p.id === id);
     if (!current) return;
@@ -931,6 +1103,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const updateCategory = async (id: string, updated: Partial<Category>) => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    const current = categories.find((c) => c.id === id);
+    if (!current) {
+      setIsSyncing(false);
+      return;
+    }
+    const merged: Category = { ...current, ...updated, id };
+    try {
+      await setDoc(doc(db, 'categories', id), buildCategoryPayload(merged));
+      setLastSyncedTime(Date.now());
+      showToast('تم تحديث بيانات القسم بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `categories/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const deleteCategory = async (id: string) => {
     ensureCloudAdminOrThrow();
     setIsSyncing(true);
@@ -940,6 +1132,110 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       showToast('تم حذف القسم');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `categories/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // --- Brands CRUD ---
+
+  const addBrand = async (brandData: Omit<StoreBrand, 'id'>) => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    const id = sanitizeId(`brand-${Date.now()}`);
+    const newBrand: StoreBrand = { ...brandData, id, sortOrder: brands.length };
+    try {
+      await setDoc(doc(db, 'brands', id), buildBrandPayload(newBrand, brands.length));
+      setLastSyncedTime(Date.now());
+      showToast('تمت إضافة العلامة التجارية ومزامنتها');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `brands/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const updateBrand = async (id: string, updated: Partial<StoreBrand>) => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    const current = brands.find((b) => b.id === id);
+    if (!current) {
+      setIsSyncing(false);
+      return;
+    }
+    const merged: StoreBrand = { ...current, ...updated, id };
+    try {
+      await setDoc(doc(db, 'brands', id), buildBrandPayload(merged));
+      setLastSyncedTime(Date.now());
+      showToast('تم تحديث العلامة التجارية بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `brands/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const deleteBrand = async (id: string) => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    try {
+      await deleteDoc(doc(db, 'brands', id));
+      setLastSyncedTime(Date.now());
+      showToast('تم حذف العلامة التجارية');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `brands/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // --- Features (ValueProps) CRUD ---
+
+  const addFeature = async (featData: Omit<StoreFeature, 'id'>) => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    const id = sanitizeId(`feat-${Date.now()}`);
+    const newFeat: StoreFeature = { ...featData, id, sortOrder: features.length };
+    try {
+      await setDoc(doc(db, 'features', id), buildFeaturePayload(newFeat, features.length));
+      setLastSyncedTime(Date.now());
+      showToast('تمت إضافة الميزة ومزامنتها');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `features/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const updateFeature = async (id: string, updated: Partial<StoreFeature>) => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    const current = features.find((f) => f.id === id);
+    if (!current) {
+      setIsSyncing(false);
+      return;
+    }
+    const merged: StoreFeature = { ...current, ...updated, id };
+    try {
+      await setDoc(doc(db, 'features', id), buildFeaturePayload(merged));
+      setLastSyncedTime(Date.now());
+      showToast('تم تحديث الميزة بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `features/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const deleteFeature = async (id: string) => {
+    ensureCloudAdminOrThrow();
+    setIsSyncing(true);
+    try {
+      await deleteDoc(doc(db, 'features', id));
+      setLastSyncedTime(Date.now());
+      showToast('تم حذف الميزة');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `features/${id}`);
     } finally {
       setIsSyncing(false);
     }
@@ -1202,13 +1498,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addProduct,
         updateProduct,
         deleteProduct,
+        clearAllProducts,
         toggleStock,
         subscribeToProductReviews,
         addProductReview,
         deleteProductReview,
         categories,
         addCategory,
+        updateCategory,
         deleteCategory,
+        brands,
+        addBrand,
+        updateBrand,
+        deleteBrand,
+        features,
+        addFeature,
+        updateFeature,
+        deleteFeature,
         selectedCategoryId,
         setSelectedCategoryId,
         searchQuery,
