@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Product, Category, Order, OrderStatus, BannerSlide } from '../types/store';
+import { Product, OrderStatus, BannerSlide, ContactInquiry } from '../types/store';
+import { compressImageFile } from '../utils/imageCompress';
 import {
   LayoutDashboard,
   Package,
@@ -14,15 +15,15 @@ import {
   RotateCcw,
   MessageSquare,
   Phone,
-  Store,
   DollarSign,
-  AlertTriangle,
   ArrowRight,
   Lock,
   Image as ImageIcon,
+  Cloud,
+  Upload,
+  Mail,
   CheckCircle2,
-  Eye,
-  Sparkles
+  AlertCircle
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -46,16 +47,24 @@ export const AdminDashboard: React.FC = () => {
     orders,
     updateOrderStatus,
     deleteOrder,
+    inquiries,
+    updateInquiryStatus,
+    deleteInquiry,
     setActiveView,
     adminSubTab,
     setAdminSubTab,
     logoutOwner,
+    isCloudAdmin,
+    isCloudSeeded,
+    signInCloudAdmin,
+    seedCloudDefaults,
     showToast
   } = useStore();
 
   // Product modal state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
   const [productForm, setProductForm] = useState({
     name: '',
     brand: '',
@@ -64,6 +73,7 @@ export const AdminDashboard: React.FC = () => {
     originalPrice: 120,
     discountBadge: '',
     image: '',
+    extraImagesText: '',
     description: '',
     inStock: true,
     stockCount: 20,
@@ -88,6 +98,9 @@ export const AdminDashboard: React.FC = () => {
 
   // Settings form state
   const [settingsForm, setSettingsForm] = useState({ ...settings });
+  useEffect(() => {
+    setSettingsForm({ ...settings });
+  }, [settings]);
 
   // Category modal state
   const [newCatName, setNewCatName] = useState('');
@@ -97,12 +110,13 @@ export const AdminDashboard: React.FC = () => {
   // Search & filter in admin
   const [adminSearch, setAdminSearch] = useState('');
   const [orderFilter, setOrderFilter] = useState<string>('all');
+  const [inquiryFilter, setInquiryFilter] = useState<string>('all');
 
   // Stats calculation
   const totalRevenue = orders.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.total : 0), 0);
   const pendingOrdersCount = orders.filter(o => o.status === 'pending').length;
+  const newInquiriesCount = inquiries.filter(i => i.status === 'new').length;
   const inStockCount = products.filter(p => p.inStock).length;
-  const outOfStockCount = products.filter(p => !p.inStock).length;
 
   // Handlers for Products
   const handleOpenAddProduct = () => {
@@ -115,6 +129,7 @@ export const AdminDashboard: React.FC = () => {
       originalPrice: 180,
       discountBadge: 'عرض خاص',
       image: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=600&q=80',
+      extraImagesText: '',
       description: 'أداة عالية الجودة معتمدة للأعمال الإنشائية والورش.',
       inStock: true,
       stockCount: 25,
@@ -126,6 +141,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleOpenEditProduct = (prod: Product) => {
     setEditingProductId(prod.id);
+    const extraImgs = (prod.images || []).filter((img) => img !== prod.image);
     setProductForm({
       name: prod.name,
       brand: prod.brand,
@@ -134,6 +150,7 @@ export const AdminDashboard: React.FC = () => {
       originalPrice: prod.originalPrice || prod.price,
       discountBadge: prod.discountBadge || '',
       image: prod.image,
+      extraImagesText: extraImgs.join('\n'),
       description: prod.description,
       inStock: prod.inStock,
       stockCount: prod.stockCount,
@@ -143,49 +160,111 @@ export const AdminDashboard: React.FC = () => {
     setIsProductModalOpen(true);
   };
 
+  const handleProductFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: 'main' | 'extra'
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsCompressingImage(true);
+    try {
+      if (target === 'main') {
+        const compressed = await compressImageFile(files[0]);
+        setProductForm((prev) => ({ ...prev, image: compressed }));
+        showToast('تم ضغط الصورة الرئيسية وتجهيزها للرفع السحابي');
+      } else {
+        const compressedList: string[] = [];
+        for (let i = 0; i < Math.min(files.length, 6); i++) {
+          const url = await compressImageFile(files[i], 700, 85000);
+          compressedList.push(url);
+        }
+        setProductForm((prev) => ({
+          ...prev,
+          extraImagesText: [prev.extraImagesText, ...compressedList]
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .join('\n')
+        }));
+        showToast(`تم تجهيز ${compressedList.length} صور إضافية للمنتج`);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'تعذر معالجة الصورة');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleBannerFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingImage(true);
+    try {
+      const compressed = await compressImageFile(file, 1000, 120000);
+      setBannerForm((prev) => ({ ...prev, image: compressed }));
+      showToast('تم ضغط صورة البنر وتجهيزها بنجاح');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'تعذر معالجة صورة البنر');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const cat = categories.find(c => c.id === productForm.categoryId);
     const options = productForm.optionsText
       ? productForm.optionsText.split(',').map(s => s.trim()).filter(Boolean)
       : undefined;
+    const extraImages = productForm.extraImagesText
+      .split(/\n|,/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const allImages = Array.from(new Set([productForm.image.trim(), ...extraImages].filter(Boolean))).slice(0, 15);
 
-    if (editingProductId) {
-      await updateProduct(editingProductId, {
-        name: productForm.name,
-        brand: productForm.brand,
-        categoryId: productForm.categoryId,
-        categoryName: cat?.name || 'عام',
-        price: Number(productForm.price),
-        originalPrice: Number(productForm.originalPrice),
-        discountBadge: productForm.discountBadge || undefined,
-        image: productForm.image,
-        description: productForm.description,
-        inStock: productForm.inStock,
-        stockCount: Number(productForm.stockCount),
-        unit: productForm.unit,
-        hasOptions: !!(options && options.length > 0),
-        options
-      });
-    } else {
-      await addProduct({
-        name: productForm.name,
-        brand: productForm.brand,
-        categoryId: productForm.categoryId,
-        categoryName: cat?.name || 'عام',
-        price: Number(productForm.price),
-        originalPrice: Number(productForm.originalPrice),
-        discountBadge: productForm.discountBadge || undefined,
-        image: productForm.image,
-        description: productForm.description,
-        inStock: productForm.inStock,
-        stockCount: Number(productForm.stockCount),
-        unit: productForm.unit,
-        hasOptions: !!(options && options.length > 0),
-        options
-      });
+    try {
+      if (editingProductId) {
+        await updateProduct(editingProductId, {
+          name: productForm.name,
+          brand: productForm.brand,
+          categoryId: productForm.categoryId,
+          categoryName: cat?.name || 'عام',
+          price: Number(productForm.price),
+          originalPrice: Number(productForm.originalPrice),
+          discountBadge: productForm.discountBadge || undefined,
+          image: productForm.image,
+          images: allImages,
+          description: productForm.description,
+          inStock: productForm.inStock,
+          stockCount: Number(productForm.stockCount),
+          unit: productForm.unit,
+          hasOptions: !!(options && options.length > 0),
+          options
+        });
+      } else {
+        await addProduct({
+          name: productForm.name,
+          brand: productForm.brand,
+          categoryId: productForm.categoryId,
+          categoryName: cat?.name || 'عام',
+          price: Number(productForm.price),
+          originalPrice: Number(productForm.originalPrice),
+          discountBadge: productForm.discountBadge || undefined,
+          image: productForm.image,
+          images: allImages,
+          description: productForm.description,
+          inStock: productForm.inStock,
+          stockCount: Number(productForm.stockCount),
+          unit: productForm.unit,
+          hasOptions: !!(options && options.length > 0),
+          options
+        });
+      }
+      setIsProductModalOpen(false);
+    } catch {
+      // handled by StoreContext toast/error handler
     }
-    setIsProductModalOpen(false);
   };
 
   // Handlers for Banners
@@ -224,40 +303,57 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bannerForm.title.trim() || !bannerForm.image.trim()) {
-      alert('يرجى كتابة عنوان البنر ووضع رابط الصورة');
+      showToast('يرجى كتابة عنوان البنر ووضع رابط أو صورة للبنر');
       return;
     }
 
-    if (editingBannerId) {
-      await updateBanner(editingBannerId, bannerForm);
-    } else {
-      await addBanner(bannerForm);
+    try {
+      if (editingBannerId) {
+        await updateBanner(editingBannerId, bannerForm);
+      } else {
+        await addBanner(bannerForm);
+      }
+      setIsBannerModalOpen(false);
+    } catch {
+      // handled in StoreContext
     }
-    setIsBannerModalOpen(false);
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateSettings(settingsForm);
+    try {
+      await updateSettings(settingsForm);
+    } catch {
+      // handled in StoreContext
+    }
   };
 
   const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
-    await addCategory({
-      name: newCatName.trim(),
-      description: newCatDesc.trim(),
-      image: newCatImage.trim() || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-      iconName: 'Package',
-      itemCount: 0
-    });
-    setNewCatName('');
-    setNewCatDesc('');
-    setNewCatImage('');
+    try {
+      await addCategory({
+        name: newCatName.trim(),
+        description: newCatDesc.trim(),
+        image: newCatImage.trim() || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
+        iconName: 'Package',
+        itemCount: 0
+      });
+      setNewCatName('');
+      setNewCatDesc('');
+      setNewCatImage('');
+    } catch {
+      // handled in StoreContext
+    }
   };
 
   const filteredOrders = orders.filter(o => {
     if (orderFilter !== 'all' && o.status !== orderFilter) return false;
+    return true;
+  });
+
+  const filteredInquiries = inquiries.filter(i => {
+    if (inquiryFilter !== 'all' && i.status !== inquiryFilter) return false;
     return true;
   });
 
@@ -360,6 +456,19 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             <button
+              onClick={() => setAdminSubTab('inquiries')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-all relative ${
+                adminSubTab === 'inquiries' ? 'bg-amber-400 text-slate-950 font-black shadow' : 'text-blue-200 hover:bg-white/10'
+              }`}
+            >
+              <Mail className="w-4 h-4" />
+              <span>استفسارات العملاء ({inquiries.length})</span>
+              {newInquiriesCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute top-1.5 right-1.5" />
+              )}
+            </button>
+
+            <button
               onClick={() => setAdminSubTab('categories')}
               className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-all ${
                 adminSubTab === 'categories' ? 'bg-amber-400 text-slate-950 font-black shadow' : 'text-blue-200 hover:bg-white/10'
@@ -380,6 +489,55 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Cloud Auth & Sync Status Banner */}
+      <div className="max-w-7xl mx-auto px-4 pt-4">
+        {!isCloudAdmin ? (
+          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3 text-xs">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div>
+                <div className="font-black text-amber-950">
+                  المزامنة السحابية للنشر غير مفعّلة في هذه الجلسة
+                </div>
+                <p className="text-amber-800 mt-0.5">
+                  لتتمكن من إضافة/تعديل المنتجات والبنرات والرد على استفسارات وطلبات العملاء ومزامنتها لحظياً في جميع أنحاء مصر، يرجى تأكيد الدخول بحساب المالك السحابي (Google).
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => signInCloudAdmin()}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow shrink-0"
+            >
+              <Cloud className="w-4 h-4" />
+              <span>تفعيل المزامنة السحابية (Google)</span>
+            </button>
+          </div>
+        ) : !isCloudSeeded ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3 text-xs">
+              <Cloud className="w-5 h-5 text-blue-600 shrink-0" />
+              <div>
+                <div className="font-black text-blue-950">
+                  حساب المالك السحابي متصل — الكتالوج الافتراضي جاهز للنشر على السحابة
+                </div>
+                <p className="text-blue-800 mt-0.5">
+                  اضغط لنشر المنتجات والأقسام والبنرات الافتراضية إلى قاعدة البيانات السحابية ليراها ويقيّمها جميع العملاء فوراً.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => seedCloudDefaults(true)}
+              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow shrink-0"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>نشر الكتالوج للسحابة الآن</span>
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {/* Main Container */}
@@ -744,7 +902,7 @@ export const AdminDashboard: React.FC = () => {
                         <div>
                           <div className="text-sm font-black text-slate-900">{ord.customerName}</div>
                           <div className="text-xs text-slate-500">
-                            بتاريخ: {new Date(ord.createdAt).toLocaleDateString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                            بتاريخ: {new Date(ord.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
                           </div>
                         </div>
                       </div>
@@ -831,6 +989,123 @@ export const AdminDashboard: React.FC = () => {
               )}
             </div>
 
+          </div>
+        )}
+
+        {/* TAB 4B: CUSTOMER INQUIRIES MANAGER */}
+        {adminSubTab === 'inquiries' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+                <span className="text-slate-500 ml-1">تصفية الاستفسارات:</span>
+                {(['all', 'new', 'replied', 'resolved'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setInquiryFilter(st)}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      inquiryFilter === st
+                        ? 'bg-blue-600 text-white font-black shadow-sm'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {st === 'all'
+                      ? 'الكل'
+                      : st === 'new'
+                      ? 'جديد'
+                      : st === 'replied'
+                      ? 'تم الرد'
+                      : 'مكتمل'}
+                  </button>
+                ))}
+              </div>
+              <div className="text-xs text-slate-500 font-bold">
+                عدد الرسائل: {filteredInquiries.length}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {filteredInquiries.length > 0 ? (
+                filteredInquiries.map((inq) => (
+                  <div
+                    key={inq.id}
+                    className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm space-y-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-black text-slate-900">{inq.customerName}</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            {inq.subject}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          بتاريخ: {new Date(inq.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+                          {inq.sentVia === 'whatsapp_and_database' ? ' • أُرسل أيضاً عبر واتساب' : ''}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={inq.status}
+                          onChange={(e) =>
+                            updateInquiryStatus(inq.id, e.target.value as ContactInquiry['status'])
+                          }
+                          className="text-xs font-bold px-3 py-1.5 rounded-xl border bg-slate-50"
+                        >
+                          <option value="new">استفسار جديد</option>
+                          <option value="replied">تم التواصل والرد</option>
+                          <option value="resolved">مكتمل / مغلق</option>
+                        </select>
+
+                        <a
+                          href={`https://wa.me/2${inq.customerPhone.replace(/^0+/, '')}?text=${encodeURIComponent(`مرحباً أستاذ ${inq.customerName}، بخصوص استفسارك (${inq.subject}) في متجر الموان...`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                          title="رد عبر واتساب"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </a>
+
+                        <a
+                          href={`tel:${inq.customerPhone}`}
+                          className="p-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
+                          title="اتصال هاتفي"
+                        >
+                          <Phone className="w-4 h-4" />
+                        </a>
+
+                        <button
+                          onClick={() => {
+                            if (confirm(`هل أنت متأكد من حذف استفسار ${inq.customerName}؟`)) {
+                              deleteInquiry(inq.id);
+                            }
+                          }}
+                          className="p-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition-colors"
+                          title="حذف الاستفسار"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs space-y-1">
+                      <div className="text-slate-500 font-bold">
+                        رقم الهاتف: <span className="text-slate-900" dir="ltr">{inq.customerPhone}</span>
+                      </div>
+                      <p className="text-slate-800 leading-relaxed whitespace-pre-line">
+                        {inq.message}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
+                  <Mail className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                  <div className="text-sm font-bold text-slate-700">لا توجد استفسارات تطابق الفلتر الحالي</div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1162,13 +1437,25 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">رابط صورة البنر (Image URL) *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">صورة البنر (رابط URL أو رفع مباشر من جهازك) *</label>
+                  <label className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-200">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isCompressingImage ? 'جاري الضغط...' : 'رفع صورة من الجهاز'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBannerFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
                 <input
-                  type="url"
+                  type="text"
                   required
                   value={bannerForm.image}
                   onChange={(e) => setBannerForm({ ...bannerForm, image: e.target.value })}
-                  placeholder="https://..."
+                  placeholder="https://... أو اختر صورة من جهازك"
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
                 />
               </div>
@@ -1352,13 +1639,27 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">رابط صورة المنتج (URL)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700">الصورة الرئيسية للمنتج *</label>
+                    <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200">
+                      <Upload className="w-3 h-3" />
+                      <span>{isCompressingImage ? 'جاري...' : 'رفع من الجهاز'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleProductFileUpload(e, 'main')}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                   <input
-                    type="url"
+                    type="text"
+                    required
                     value={productForm.image}
                     onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
+                    placeholder="https://... أو ارفع صورة"
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -1373,6 +1674,31 @@ export const AdminDashboard: React.FC = () => {
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">صور إضافية لمعرض المنتج (سطر لكل رابط - اختياري)</label>
+                  <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200">
+                    <Upload className="w-3 h-3" />
+                    <span>إضافة صور متعددة</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handleProductFileUpload(e, 'extra')}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <textarea
+                  rows={2}
+                  value={productForm.extraImagesText}
+                  onChange={(e) => setProductForm({ ...productForm, extraImagesText: e.target.value })}
+                  placeholder="ضع روابط صور إضافية (كل رابط في سطر جديد) أو ارفعها من جهازك..."
+                  dir="ltr"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>

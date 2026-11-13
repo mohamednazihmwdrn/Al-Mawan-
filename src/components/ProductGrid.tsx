@@ -6,6 +6,8 @@ import { Filter, SlidersHorizontal, ArrowUpDown, Sparkles, AlertCircle } from 'l
 export const ProductGrid: React.FC = () => {
   const {
     products,
+    hasMoreProducts,
+    loadMoreProducts,
     categories,
     selectedCategoryId,
     setSelectedCategoryId,
@@ -160,11 +162,25 @@ export const ProductGrid: React.FC = () => {
 
       {/* Grid of Product Cards */}
       {filteredProducts.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-          {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+            {filteredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+
+          {hasMoreProducts && (
+            <div className="mt-8 text-center">
+              <button
+                type="button"
+                onClick={loadMoreProducts}
+                className="px-6 py-3 rounded-2xl bg-[#163674] hover:bg-[#122854] text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95"
+              >
+                عرض المزيد من المنتجات والمعدات
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center max-w-lg mx-auto">
           <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />

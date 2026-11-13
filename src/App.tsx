@@ -6,7 +6,9 @@ import { ValueProps } from './components/ValueProps';
 import { ActionCards } from './components/ActionCards';
 import { CategoryCircles } from './components/CategoryCircles';
 import { ProductGrid } from './components/ProductGrid';
+import { ProductDetailsPage } from './components/ProductDetailsPage';
 import { BrandsSection } from './components/BrandsSection';
+import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
@@ -18,22 +20,29 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { SecretAdminAuthModal } from './components/SecretAdminAuthModal';
 
 const MainLayout: React.FC = () => {
-  const { activeView, isOwnerAuthenticated } = useStore();
+  const { activeView, isOwnerAuthenticated, selectedProduct } = useStore();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f6f8fb] text-slate-800 font-['Cairo',sans-serif] selection:bg-amber-400 selection:text-slate-950">
-      {/* View routing: Protected Admin Dashboard or Customer Storefront */}
+      {/* View routing: Protected Admin Dashboard, Product Details Page, or Customer Storefront */}
       {activeView === 'admin' && isOwnerAuthenticated ? (
         <AdminDashboard />
       ) : (
         <main className="flex-1 flex flex-col">
           <Header />
-          <HeroSlider />
-          <ValueProps />
-          <ActionCards />
-          <CategoryCircles />
-          <ProductGrid />
-          <BrandsSection />
+          {activeView === 'product' && selectedProduct ? (
+            <ProductDetailsPage />
+          ) : (
+            <>
+              <HeroSlider />
+              <ValueProps />
+              <ActionCards />
+              <CategoryCircles />
+              <ProductGrid />
+              <BrandsSection />
+              <ContactSection />
+            </>
+          )}
           <Footer />
         </main>
       )}

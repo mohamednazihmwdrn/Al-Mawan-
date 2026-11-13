@@ -8,6 +8,7 @@ export interface Product {
   originalPrice?: number;
   discountBadge?: string;
   image: string;
+  images?: string[];
   description: string;
   inStock: boolean;
   stockCount: number;
@@ -18,6 +19,31 @@ export interface Product {
   hasOptions?: boolean;
   options?: string[];
   specs?: { label: string; value: string }[];
+  ratingAvg?: number;
+  ratingCount?: number;
+  createdAt?: number;
+  updatedAt?: number;
+}
+
+export interface ProductReview {
+  id: string;
+  productId: string;
+  customerName: string;
+  rating: number;
+  comment: string;
+  verifiedPurchase?: boolean;
+  createdAt: string;
+}
+
+export interface ContactInquiry {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'replied' | 'resolved';
+  sentVia?: 'database' | 'whatsapp_and_database';
+  createdAt: string;
 }
 
 export interface Category {
@@ -38,12 +64,13 @@ export interface BannerSlide {
   image: string;
   buttonText?: string;
   buttonActionType?: 'category' | 'whatsapp' | 'paint_studio' | 'link';
-  buttonTarget?: string; // category id or link
+  buttonTarget?: string;
   active: boolean;
+  sortOrder?: number;
 }
 
 export interface CartItem {
-  id: string; // unique item id in cart (product id + selected option)
+  id: string;
   productId: string;
   product: Product;
   quantity: number;
@@ -112,4 +139,5 @@ export interface StoreSettings {
   locationMapUrl?: string;
   taxNumber?: string;
   commercialReg?: string;
+  updatedAt?: string;
 }

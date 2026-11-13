@@ -1,0 +1,186 @@
+{
+  "entities": {
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "Configuration and contact information for Al-Mawan Store",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "storeSubtitle": { "type": "string", "maxLength": 300 },
+        "announcementNotice": { "type": "string", "maxLength": 500 },
+        "phoneNumber": { "type": "string", "minLength": 7, "maxLength": 25 },
+        "phoneNumber2": { "type": "string", "maxLength": 25 },
+        "whatsappNumber": { "type": "string", "minLength": 7, "maxLength": 25 },
+        "address": { "type": "string", "minLength": 3, "maxLength": 300 },
+        "workingHours": { "type": "string", "maxLength": 150 },
+        "deliveryFee": { "type": "number" },
+        "freeDeliveryThreshold": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "commercialReg": { "type": "string", "maxLength": 50 },
+        "taxNumber": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["storeName", "phoneNumber", "whatsappNumber", "address", "deliveryFee", "freeDeliveryThreshold", "currency"]
+    },
+    "BannerSlide": {
+      "title": "BannerSlide",
+      "description": "Homepage hero banner slide with top text and non-overlapping image",
+      "type": "object",
+      "properties": {
+        "badge": { "type": "string", "maxLength": 80 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "subtitle": { "type": "string", "maxLength": 250 },
+        "description": { "type": "string", "maxLength": 600 },
+        "image": { "type": "string", "minLength": 5, "maxLength": 50000 },
+        "buttonText": { "type": "string", "maxLength": 60 },
+        "buttonActionType": { "type": "string", "enum": ["category", "whatsapp", "paint_studio", "link"] },
+        "buttonTarget": { "type": "string", "maxLength": 200 },
+        "active": { "type": "boolean" },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["title", "image", "active"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product category in the hardware and paint store",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "iconName": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 400 },
+        "image": { "type": "string", "minLength": 5, "maxLength": 50000 },
+        "itemCount": { "type": "number" }
+      },
+      "required": ["name", "image"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Hardware, tool, or paint product item stored in its own scalable document",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 250 },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "categoryName": { "type": "string", "maxLength": 120 },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "discountBadge": { "type": "string", "maxLength": 60 },
+        "image": { "type": "string", "minLength": 5, "maxLength": 100000 },
+        "images": { "type": "array" },
+        "description": { "type": "string", "minLength": 2, "maxLength": 3000 },
+        "inStock": { "type": "boolean" },
+        "stockCount": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 40 },
+        "isFeatured": { "type": "boolean" },
+        "isNew": { "type": "boolean" },
+        "isBestSeller": { "type": "boolean" },
+        "hasOptions": { "type": "boolean" },
+        "options": { "type": "array" },
+        "specs": { "type": "array" },
+        "ratingAvg": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "brand", "categoryId", "categoryName", "price", "image", "description", "inStock", "stockCount", "unit"]
+    },
+    "ProductReview": {
+      "title": "ProductReview",
+      "description": "Customer rating and comment for a specific product",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "minLength": 3, "maxLength": 800 },
+        "verifiedPurchase": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "customerName", "rating", "comment", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order with delivery details",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "minLength": 3, "maxLength": 30 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "customerPhone": { "type": "string", "minLength": 7, "maxLength": 25 },
+        "customerPhoneAlt": { "type": "string", "maxLength": 25 },
+        "governorate": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "city": { "type": "string", "maxLength": 80 },
+        "address": { "type": "string", "minLength": 4, "maxLength": 300 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "paymentMethod": { "type": "string", "enum": ["cash_on_delivery", "instapay", "vodafone_cash"] },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "shippingFee": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "processing", "shipped", "delivered", "cancelled"] }
+      },
+      "required": ["orderNumber", "createdAt", "customerName", "customerPhone", "governorate", "address", "paymentMethod", "items", "subtotal", "shippingFee", "total", "status"]
+    },
+    "ContactInquiry": {
+      "title": "ContactInquiry",
+      "description": "Customer inquiry submitted from the homepage contact form",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "customerPhone": { "type": "string", "minLength": 7, "maxLength": 25 },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 5, "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["new", "replied", "resolved"] },
+        "sentVia": { "type": "string", "enum": ["database", "whatsapp_and_database"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "customerPhone", "subject", "message", "status", "createdAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized store owner/admin user record",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 120 },
+        "role": { "type": "string", "enum": ["owner", "manager"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/StoreSettings" },
+      "description": "Store settings document (e.g. /settings/store)"
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/BannerSlide" },
+      "description": "Hero banner slides managed by the store owner"
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Store product categories"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Scalable products catalog collection supporting high volume of items and images"
+    },
+    "/products/{productId}/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/ProductReview" },
+      "description": "Subcollection of customer ratings and reviews per product"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders containing PII, readable only by store admin"
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/ContactInquiry" },
+      "description": "Customer inquiries from homepage contact form containing PII, readable only by store admin"
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Store owner and admin authorization documents"
+    }
+  }
+}

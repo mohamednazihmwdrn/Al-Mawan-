@@ -16,7 +16,8 @@ export const CheckoutModal: React.FC = () => {
     cart,
     cartSubtotal,
     settings,
-    createOrder
+    createOrder,
+    showToast
   } = useStore();
 
   const [name, setName] = useState('');
@@ -36,8 +37,8 @@ export const CheckoutModal: React.FC = () => {
   const total = cartSubtotal + shippingFee;
 
   const handleSubmitOrder = async (sendWhatsApp: boolean = false) => {
-    if (!name.trim() || !phone.trim() || !address.trim()) {
-      alert('من فضلك أكمل البيانات الأساسية: الاسم، رقم الهاتف، والعنوان.');
+    if (name.trim().length < 2 || phone.trim().length < 7 || address.trim().length < 4) {
+      showToast('من فضلك أكمل البيانات الأساسية بشكل صحيح: الاسم، رقم الهاتف، والعنوان.');
       return;
     }
 
@@ -52,52 +53,55 @@ export const CheckoutModal: React.FC = () => {
       paintDetails: item.paintDetails
     }));
 
-    const order = await createOrder({
-      customerName: name,
-      customerPhone: phone,
-      customerPhoneAlt: phoneAlt,
-      governorate,
-      city,
-      address,
-      notes,
-      paymentMethod,
-      items: orderItems,
-      subtotal: cartSubtotal,
-      shippingFee,
-      discount: 0,
-      total
-    });
-
-    setOrderCompleted(order.orderNumber);
-
-    if (sendWhatsApp) {
-      // Build WhatsApp Receipt
-      let message = `🛒 *طلب جديد من متجر الموان للحدايد والبويات*\n`;
-      message += `رقم الطلب: *#${order.orderNumber}*\n`;
-      message += `👤 *بيانات العميل:*\n`;
-      message += `- الاسم: ${name}\n`;
-      message += `- الهاتف: ${phone} ${phoneAlt ? `(بديل: ${phoneAlt})` : ''}\n`;
-      message += `- المحافظة: ${governorate} - ${city}\n`;
-      message += `- العنوان: ${address}\n`;
-      message += `- طريقة الدفع: ${paymentMethod === 'cash_on_delivery' ? 'كاش عند الاستلام' : paymentMethod === 'instapay' ? 'إنستاباي' : 'فودافون كاش'}\n\n`;
-      message += `📦 *المنتجات المطلوبة:*\n`;
-
-      orderItems.forEach((it, i) => {
-        message += `${i + 1}. ${it.productName}\n   - الماركة: ${it.brand}\n   - الكمية: ${it.quantity} × ${it.unitPrice} ج = ${it.total} ج\n`;
-        if (it.paintDetails) {
-          message += `   🎨 تركيب كمبيوتر: كود ${it.paintDetails.colorCode} (${it.paintDetails.colorName}) - ${it.paintDetails.finish}\n`;
-        }
-        if (it.selectedOption) {
-          message += `   ⚙️ المقاس: ${it.selectedOption}\n`;
-        }
+    try {
+      const order = await createOrder({
+        customerName: name,
+        customerPhone: phone,
+        customerPhoneAlt: phoneAlt,
+        governorate,
+        city,
+        address,
+        notes,
+        paymentMethod,
+        items: orderItems,
+        subtotal: cartSubtotal,
+        shippingFee,
+        discount: 0,
+        total
       });
 
-      message += `\n💵 *المجموع الفرعي:* ${cartSubtotal.toFixed(2)} ج\n`;
-      message += `🚚 *الشحن:* ${shippingFee === 0 ? 'مجاني' : `${shippingFee} ج`}\n`;
-      message += `💰 *الإجمالي المستحق:* *${total.toFixed(2)} جنيه مصري*\n`;
-      if (notes) message += `📝 *ملاحظات:* ${notes}\n`;
+      setOrderCompleted(order.orderNumber);
 
-      window.open(`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
+      if (sendWhatsApp) {
+        let message = `🛒 *طلب جديد من متجر الموان للحدايد والبويات*\n`;
+        message += `رقم الطلب: *#${order.orderNumber}*\n`;
+        message += `👤 *بيانات العميل:*\n`;
+        message += `- الاسم: ${name}\n`;
+        message += `- الهاتف: ${phone} ${phoneAlt ? `(بديل: ${phoneAlt})` : ''}\n`;
+        message += `- المحافظة: ${governorate} - ${city}\n`;
+        message += `- العنوان: ${address}\n`;
+        message += `- طريقة الدفع: ${paymentMethod === 'cash_on_delivery' ? 'كاش عند الاستلام' : paymentMethod === 'instapay' ? 'إنستاباي' : 'فودافون كاش'}\n\n`;
+        message += `📦 *المنتجات المطلوبة:*\n`;
+
+        orderItems.forEach((it, i) => {
+          message += `${i + 1}. ${it.productName}\n   - الماركة: ${it.brand}\n   - الكمية: ${it.quantity} × ${it.unitPrice} ج = ${it.total} ج\n`;
+          if (it.paintDetails) {
+            message += `   🎨 تركيب كمبيوتر: كود ${it.paintDetails.colorCode} (${it.paintDetails.colorName}) - ${it.paintDetails.finish}\n`;
+          }
+          if (it.selectedOption) {
+            message += `   ⚙️ المقاس: ${it.selectedOption}\n`;
+          }
+        });
+
+        message += `\n💵 *المجموع الفرعي:* ${cartSubtotal.toFixed(2)} ج\n`;
+        message += `🚚 *الشحن:* ${shippingFee === 0 ? 'مجاني' : `${shippingFee} ج`}\n`;
+        message += `💰 *الإجمالي المستحق:* *${total.toFixed(2)} جنيه مصري*\n`;
+        if (notes) message += `📝 *ملاحظات:* ${notes}\n`;
+
+        window.open(`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
+      }
+    } catch {
+      showToast('تعذر حفظ الطلب حالياً، يمكنك إرسال الطلب مباشرة عبر واتساب.');
     }
   };
 

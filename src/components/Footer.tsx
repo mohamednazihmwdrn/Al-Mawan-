@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { settings, categories, setSelectedCategoryId, setIsPaintStudioOpen, triggerSecretClick, secretClicks } = useStore();
+  const { settings, categories, setSelectedCategoryId, closeProductDetails, setIsPaintStudioOpen, triggerSecretClick, secretClicks } = useStore();
 
   return (
     <footer className="bg-[#0b1c3d] text-slate-300 pt-12 pb-8 border-t border-white/10 select-none">
@@ -53,6 +53,7 @@ export const Footer: React.FC = () => {
                   <button
                     onClick={() => {
                       setSelectedCategoryId(cat.id);
+                      closeProductDetails();
                       window.scrollTo({ top: 400, behavior: 'smooth' });
                     }}
                     className="hover:text-amber-400 transition-colors text-right"
@@ -85,11 +86,11 @@ export const Footer: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
                 <div className="flex items-center gap-2">
-                  <a href="tel:01008377405" dir="ltr" className="text-white font-bold hover:text-amber-400">
+                  <a href={`tel:${settings.phoneNumber || '01008377405'}`} dir="ltr" className="text-white font-bold hover:text-amber-400">
                     {settings.phoneNumber || '01008377405'}
                   </a>
                   <span className="text-slate-500">|</span>
-                  <a href="tel:01029190615" dir="ltr" className="text-white font-bold hover:text-amber-400">
+                  <a href={`tel:${settings.phoneNumber2 || '01029190615'}`} dir="ltr" className="text-white font-bold hover:text-amber-400">
                     {settings.phoneNumber2 || '01029190615'}
                   </a>
                 </div>
@@ -97,13 +98,13 @@ export const Footer: React.FC = () => {
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-green-400 shrink-0" />
                 <a
-                  href={`https://wa.me/201029190615?text=${encodeURIComponent('السلام عليكم، استفسار بخصوص منتجات الموان')}`}
+                  href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent('السلام عليكم، استفسار بخصوص منتجات الموان')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-white font-bold hover:text-green-400"
                   dir="ltr"
                 >
-                  01029190615 (واتساب مبيعات)
+                  {settings.phoneNumber2 || '01029190615'} (واتساب مبيعات)
                 </a>
               </div>
               <div className="flex items-center gap-2">

@@ -22,6 +22,7 @@ export const Header: React.FC = () => {
     setIsCartOpen,
     activeView,
     setActiveView,
+    closeProductDetails,
     searchQuery,
     setSearchQuery,
     categories,
@@ -39,14 +40,14 @@ export const Header: React.FC = () => {
   const handleCategoryClick = (catId: string | null) => {
     setSelectedCategoryId(catId);
     setSelectedFilter('all');
-    if (activeView === 'admin') setActiveView('storefront');
+    if (activeView !== 'storefront') closeProductDetails();
     setMobileMenuOpen(false);
   };
 
   const handleFilterClick = (filter: 'all' | 'deals' | 'new' | 'bestsellers') => {
     setSelectedFilter(filter);
     setSelectedCategoryId(null);
-    if (activeView === 'admin') setActiveView('storefront');
+    if (activeView !== 'storefront') closeProductDetails();
     setMobileMenuOpen(false);
   };
 
@@ -60,7 +61,7 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-2.5 group shrink-0">
             <div
               onClick={() => {
-                setActiveView('storefront');
+                closeProductDetails();
                 setSelectedCategoryId(null);
                 setSelectedFilter('all');
                 setSearchQuery('');
@@ -73,7 +74,7 @@ export const Header: React.FC = () => {
             <div className="flex flex-col">
               <div
                 onClick={() => {
-                  setActiveView('storefront');
+                  closeProductDetails();
                   setSelectedCategoryId(null);
                   setSelectedFilter('all');
                   setSearchQuery('');
@@ -115,7 +116,10 @@ export const Header: React.FC = () => {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (activeView === 'product') closeProductDetails();
+                }}
                 placeholder="ابحث عن عدد، شنيور، بويات، مسامير، خراطيم، كود لون..."
                 className="w-full bg-white/10 text-white placeholder-blue-200/70 border border-white/20 rounded-full py-2 pl-4 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white focus:text-slate-900 transition-all shadow-inner"
               />
@@ -175,7 +179,10 @@ export const Header: React.FC = () => {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (activeView === 'product') closeProductDetails();
+              }}
               placeholder="ابحث عن عدد، بويات، مسامير، خراطيم، كود لون..."
               className="w-full bg-white/15 text-white placeholder-blue-200/80 border border-white/20 rounded-full py-2 pl-4 pr-10 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 focus:bg-white focus:text-slate-900 transition-all shadow-inner"
             />
@@ -283,28 +290,28 @@ export const Header: React.FC = () => {
           <div className="pt-3 border-t border-white/10 space-y-2">
             <div className="grid grid-cols-2 gap-2">
               <a
-                href="tel:01008377405"
+                href={`tel:${settings.phoneNumber || '01008377405'}`}
                 className="py-2.5 px-2 rounded-lg bg-white/10 text-white font-bold text-xs flex items-center justify-center gap-1.5"
               >
                 <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-                <span dir="ltr">01008377405</span>
+                <span dir="ltr">{settings.phoneNumber || '01008377405'}</span>
               </a>
               <a
-                href="tel:01029190615"
+                href={`tel:${settings.phoneNumber2 || '01029190615'}`}
                 className="py-2.5 px-2 rounded-lg bg-white/10 text-white font-bold text-xs flex items-center justify-center gap-1.5"
               >
                 <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-                <span dir="ltr">01029190615</span>
+                <span dir="ltr">{settings.phoneNumber2 || '01029190615'}</span>
               </a>
             </div>
             <a
-              href="https://wa.me/201029190615?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20%D8%A8%D8%AE%D8%B5%D9%88%D8%B5%20%D9%85%D9%86%D8%AA%D8%AC%D8%A7%D8%AA%20%D8%A7%D9%84%D9%85%D9%88%D8%A7%D9%86"
+              href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent('السلام عليكم، استفسار بخصوص منتجات الموان')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-2.5 px-3 rounded-lg bg-emerald-700/50 text-white font-bold text-xs flex items-center justify-center gap-2 border border-emerald-500/30"
             >
               <MessageSquare className="w-4 h-4 text-emerald-300" />
-              <span>محادثة واتساب مبيعات: 01029190615</span>
+              <span>محادثة واتساب مبيعات: {settings.phoneNumber2 || '01029190615'}</span>
             </a>
           </div>
         </div>
