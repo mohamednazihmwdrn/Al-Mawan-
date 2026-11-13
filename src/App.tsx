@@ -18,6 +18,8 @@ import { FloatingWhatsApp } from './components/FloatingWhatsApp';
 import { Toast } from './components/Toast';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SecretAdminAuthModal } from './components/SecretAdminAuthModal';
+import { PWAInstallBanner } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 const MainLayout: React.FC = () => {
   const { activeView, isOwnerAuthenticated, selectedProduct } = useStore();
@@ -53,6 +55,8 @@ const MainLayout: React.FC = () => {
       <PaintStudioModal />
       <ProductQuickViewModal />
       <FloatingWhatsApp />
+      <PWAInstallBanner />
+      <OfflineIndicator />
       <Toast />
       <SecretAdminAuthModal />
     </div>

@@ -35,11 +35,6 @@ export const Footer: React.FC = () => {
             <p className="text-slate-400 leading-relaxed">
               {settings.storeSubtitle}. نوفر لعملائنا نخب أول من العدد اليدوية والكهربائية ومستلزمات الهواء والدهانات الأصلية مع خلط ألوان دقيق بالكمبيوتر.
             </p>
-
-            <div className="pt-2 text-[11px] text-slate-400 space-y-1">
-              <div>السجل التجاري: <strong className="text-white">{settings.commercialReg || '109843'}</strong></div>
-              <div>البطاقة الضريبية: <strong className="text-white">{settings.taxNumber || '948-230-112'}</strong></div>
-            </div>
           </div>
 
           {/* Col 2: Categories */}
@@ -130,18 +125,14 @@ export const Footer: React.FC = () => {
               </div>
             </div>
 
-            {/* Secret Click Trigger under 'الموانئ والامدادات' */}
+            {/* Secret Click Trigger under store name */}
             <div className="pt-4 border-t border-white/5">
-              <div className="text-[11px] text-slate-400 flex items-center justify-between">
-                <span>الجهة المشغلة والمعتمدة:</span>
-              </div>
               <div
                 onClick={triggerSecretClick}
                 className="mt-1.5 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-amber-400/30 cursor-pointer transition-all flex items-center justify-between"
-                title="الموانئ والامدادات"
               >
                 <span className="font-bold text-slate-200 hover:text-amber-300 transition-colors">
-                  الموانئ والامدادات
+                  {settings.storeName}
                 </span>
                 {secretClicks > 2 && (
                   <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-full animate-bounce">
@@ -157,13 +148,14 @@ export const Footer: React.FC = () => {
         {/* Bottom Bar */}
         <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
           <div className="flex items-center gap-1.5">
-            <span>جميع الحقوق محفوظة © {new Date().getFullYear()} لـ <strong className="text-slate-300">{settings.storeName}</strong></span>
-            <span>-</span>
-            <span
-              onClick={triggerSecretClick}
-              className="hover:text-slate-400 cursor-pointer"
-            >
-              الموانئ والامدادات
+            <span>
+              جميع الحقوق محفوظة © {new Date().getFullYear()} لـ{' '}
+              <strong
+                onClick={triggerSecretClick}
+                className="text-slate-300 hover:text-amber-300 cursor-pointer transition-colors"
+              >
+                {settings.storeName}
+              </strong>
             </span>
           </div>
           <div className="flex items-center gap-3">

@@ -13,9 +13,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   freeDeliveryThreshold: 1000,
   currency: "EGP",
   facebookUrl: "https://facebook.com",
-  locationMapUrl: "https://maps.google.com",
-  commercialReg: "109843",
-  taxNumber: "948-230-112"
+  locationMapUrl: "https://maps.google.com"
 };
 
 export const INITIAL_BANNERS: BannerSlide[] = [

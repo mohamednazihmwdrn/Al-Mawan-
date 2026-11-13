@@ -14,6 +14,7 @@ import {
   Hammer,
   MessageSquare
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export const Header: React.FC = () => {
   const {
@@ -81,25 +82,21 @@ export const Header: React.FC = () => {
                 }}
                 className="flex items-center gap-1.5 cursor-pointer"
               >
-                <span className="text-lg sm:text-xl font-black tracking-tight text-white group-hover:text-amber-300 transition-colors">
-                  {settings.storeName.split(' ')[0]}
-                </span>
-                <span className="text-xs sm:text-sm font-bold text-amber-400">
-                  {settings.storeName.split(' ').slice(1, 3).join(' ')}
+                <span className="text-lg sm:text-xl font-black tracking-tight text-white group-hover:text-amber-300 transition-colors leading-tight">
+                  {settings.storeName.split(' ')[0] || 'الموان'}
                 </span>
               </div>
-              
-              {/* Secret trigger phrase: "الموانئ والامدادات" */}
-              <div className="flex items-center gap-1">
+
+              {/* Full store subtitle + discreet 10-click owner panel trigger */}
+              <div className="flex items-center gap-1.5">
                 <span
                   onClick={(e) => {
                     e.stopPropagation();
                     triggerSecretClick();
                   }}
-                  title="الموانئ والامدادات"
-                  className="text-[10px] sm:text-xs text-blue-200/90 hover:text-amber-300 font-semibold cursor-pointer select-none transition-colors"
+                  className="text-[11px] sm:text-xs font-bold text-amber-400 hover:text-amber-300 cursor-pointer select-none transition-colors leading-tight"
                 >
-                  الموانئ والامدادات
+                  {settings.storeName.split(' ').slice(1).join(' ') || 'للحدايد والبويات ولوازم المعمار'}
                 </span>
                 {secretClicks > 2 && (
                   <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-1 rounded-full animate-pulse">
@@ -137,6 +134,9 @@ export const Header: React.FC = () => {
 
           {/* Quick Actions */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* PWA Install App Button */}
+            <PWAInstallButton variant="header" />
+
             {/* Computer Paint Studio Button */}
             <button
               onClick={() => setIsPaintStudioOpen(true)}
@@ -288,6 +288,7 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="pt-3 border-t border-white/10 space-y-2">
+            <PWAInstallButton variant="mobileMenu" onAfterAction={() => setMobileMenuOpen(false)} />
             <div className="grid grid-cols-2 gap-2">
               <a
                 href={`tel:${settings.phoneNumber || '01008377405'}`}
