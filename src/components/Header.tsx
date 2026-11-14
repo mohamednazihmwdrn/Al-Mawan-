@@ -76,30 +76,22 @@ export const Header: React.FC = () => {
               <span className="text-xl sm:text-2xl font-black tracking-tighter">م</span>
             </div>
             
-            <div className="flex flex-col">
-              <div
-                onClick={() => {
-                  closeProductDetails();
-                  setSelectedCategoryId(null);
-                  setSelectedFilter('all');
-                  setSearchQuery('');
-                }}
-                className="flex items-center gap-1.5 cursor-pointer"
-              >
-                <span className="text-lg sm:text-xl font-black tracking-tight text-white group-hover:text-amber-300 transition-colors leading-tight">
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerSecretClick();
+              }}
+              className="flex flex-col select-none"
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="text-lg sm:text-xl font-black tracking-tight text-white leading-tight">
                   {settings.storeName.split(' ')[0] || 'الموان'}
                 </span>
               </div>
 
               {/* Full store subtitle */}
               <div className="flex items-center gap-1.5">
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    triggerSecretClick();
-                  }}
-                  className="text-[11px] sm:text-xs font-bold text-amber-400 select-none leading-tight"
-                >
+                <span className="text-[11px] sm:text-xs font-bold text-amber-400 select-none leading-tight">
                   {settings.storeName.split(' ').slice(1).join(' ') || 'للحدايد والبويات ولوازم المعمار'}
                 </span>
               </div>

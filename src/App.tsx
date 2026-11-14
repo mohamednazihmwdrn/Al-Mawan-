@@ -21,10 +21,8 @@ import { SecretAdminAuthModal } from './components/SecretAdminAuthModal';
 import { PWAInstallBanner } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
 
-import { Settings } from 'lucide-react';
-
 const MainLayout: React.FC = () => {
-  const { activeView, setActiveView, isOwnerAuthenticated, selectedProduct, settings } = useStore();
+  const { activeView, isOwnerAuthenticated, selectedProduct, settings } = useStore();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f6f8fb] text-slate-800 font-['Cairo',sans-serif] selection:bg-amber-400 selection:text-slate-950">
@@ -49,18 +47,6 @@ const MainLayout: React.FC = () => {
           )}
           <Footer />
         </main>
-      )}
-
-      {/* Quick return to Owner Dashboard when owner is authenticated & previewing storefront */}
-      {isOwnerAuthenticated && activeView !== 'admin' && (
-        <button
-          type="button"
-          onClick={() => setActiveView('admin')}
-          className="fixed bottom-4 right-4 z-40 px-4 py-2.5 rounded-2xl bg-[#122854] hover:bg-[#1c3e7d] text-amber-300 font-black text-xs shadow-xl border border-amber-400/40 flex items-center gap-2 transition-all active:scale-95"
-        >
-          <Settings className="w-4 h-4" />
-          <span>العودة للوحة تحكم المالك</span>
-        </button>
       )}
 
       {/* Global Modals & Overlays */}

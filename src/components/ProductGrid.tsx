@@ -18,10 +18,7 @@ export const ProductGrid: React.FC = () => {
     searchQuery,
     setSearchQuery,
     selectedFilter,
-    setSelectedFilter,
-    isOwnerAuthenticated,
-    setActiveView,
-    setAdminSubTab
+    setSelectedFilter
   } = useStore();
 
   const [sortBy, setSortBy] = useState<'featured' | 'price-asc' | 'price-desc' | 'name'>('featured');
@@ -304,17 +301,6 @@ export const ProductGrid: React.FC = () => {
               : 'نقوم حالياً بإضافة أحدث العدد والمعدات والبويات ولوازم المعمار بأسعارها الحقيقية المحدثة. يمكنك التواصل معنا مباشرة الآن للاستفسار أو الطلب الفوري.'}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {isOwnerAuthenticated && (
-              <button
-                onClick={() => {
-                  setAdminSubTab('products');
-                  setActiveView('admin');
-                }}
-                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow transition-all"
-              >
-                إضافة أول منتج من لوحة المالك
-              </button>
-            )}
             <a
               href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent(`السلام عليكم ${settings.storeName}، أريد الاستفسار عن توفر منتجات وأسعار${activeSubPage ? ` (${activeSubPage.name})` : ''}`)}`}
               target="_blank"
