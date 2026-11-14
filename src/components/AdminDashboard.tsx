@@ -195,6 +195,15 @@ export const AdminDashboard: React.FC = () => {
   const [orderFilter, setOrderFilter] = useState<string>('all');
   const [inquiryFilter, setInquiryFilter] = useState<string>('all');
 
+  // In-app Confirmation Modal (replaces native browser confirm())
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+  const [isConfirmExecuting, setIsConfirmExecuting] = useState(false);
+
   // Stats calculation
   const totalRevenue = orders.reduce((sum, o) => sum + (o.status !== 'cancelled' ? o.total : 0), 0);
   const pendingOrdersCount = orders.filter(o => o.status === 'pending').length;
@@ -403,16 +412,21 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveBanner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bannerForm.title.trim() || !bannerForm.image.trim()) {
-      showToast('يرجى كتابة عنوان البنر ووضع رابط أو صورة للبنر');
+    if (!bannerForm.image.trim()) {
+      showToast('يرجى رفع صورة للبنر أو وضع رابط صورة صحيح');
       return;
     }
 
+    const sanitizedBannerPayload = {
+      ...bannerForm,
+      title: bannerForm.title.trim().length >= 2 ? bannerForm.title.trim() : 'بنر إعلاني'
+    };
+
     try {
       if (editingBannerId) {
-        await updateBanner(editingBannerId, bannerForm);
+        await updateBanner(editingBannerId, sanitizedBannerPayload);
       } else {
-        await addBanner(bannerForm);
+        await addBanner(sanitizedBannerPayload);
       }
       setIsBannerModalOpen(false);
     } catch {
@@ -1084,11 +1098,11 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   {/* Image View */}
-                  <div className="w-full aspect-[21/9] bg-slate-950 relative overflow-hidden">
+                  <div className="w-full bg-slate-950 relative overflow-hidden">
                     <img
                       src={b.image}
                       alt={b.title}
-                      className="w-full h-full object-cover"
+                      className="w-full h-44 object-contain mx-auto"
                     />
                   </div>
 
@@ -1114,11 +1128,13 @@ export const AdminDashboard: React.FC = () => {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => {
-                          if (confirm(`هل أنت متأكد من حذف هذا البنر؟`)) {
-                            deleteBanner(b.id);
-                          }
-                        }}
+                        onClick={() =>
+                          setConfirmModal({
+                            title: 'حذف البنر',
+                            message: 'هل أنت متأكد من حذف هذا البنر نهائياً من الواجهة؟',
+                            onConfirm: () => deleteBanner(b.id)
+                          })
+                        }
                         className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
                         title="حذف البنر"
                       >
@@ -1154,11 +1170,14 @@ export const AdminDashboard: React.FC = () => {
                 {products.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (confirm(`هل أنت متأكد من حذف جميع المنتجات (${products.length} منتج) لتنظيف المتجر بالكامل؟`)) {
-                        clearAllProducts();
-                      }
-                    }}
+                    onClick={() =>
+                      setConfirmModal({
+                        title: 'حذف جميع المنتجات',
+                        message: `هل أنت متأكد من حذف جميع المنتجات (${products.length} منتج) لتنظيف المتجر بالكامل؟`,
+                        confirmLabel: 'نعم، احذف الكل',
+                        onConfirm: () => clearAllProducts()
+                      })
+                    }
                     className="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1262,11 +1281,13 @@ export const AdminDashboard: React.FC = () => {
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm(`هل أنت متأكد من حذف المنتج: ${p.name}؟`)) {
-                                    deleteProduct(p.id);
-                                  }
-                                }}
+                                onClick={() =>
+                                  setConfirmModal({
+                                    title: 'حذف المنتج',
+                                    message: `هل أنت متأكد من حذف المنتج: "${p.name}"؟ سيختفي فوراً من كافة أجهزة العملاء.`,
+                                    onConfirm: () => deleteProduct(p.id)
+                                  })
+                                }
                                 className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
                                 title="حذف"
                               >
@@ -1376,11 +1397,13 @@ export const AdminDashboard: React.FC = () => {
                         </a>
 
                         <button
-                          onClick={() => {
-                            if (confirm(`هل أنت متأكد من حذف الطلب #${ord.orderNumber}؟`)) {
-                              deleteOrder(ord.id);
-                            }
-                          }}
+                          onClick={() =>
+                            setConfirmModal({
+                              title: 'حذف الطلب',
+                              message: `هل أنت متأكد من حذف الطلب #${ord.orderNumber} من السجل؟`,
+                              onConfirm: () => deleteOrder(ord.id)
+                            })
+                          }
                           className="p-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition-colors"
                           title="حذف الطلب"
                         >
@@ -1527,11 +1550,13 @@ export const AdminDashboard: React.FC = () => {
                         </a>
 
                         <button
-                          onClick={() => {
-                            if (confirm(`هل أنت متأكد من حذف استفسار ${inq.customerName}؟`)) {
-                              deleteInquiry(inq.id);
-                            }
-                          }}
+                          onClick={() =>
+                            setConfirmModal({
+                              title: 'حذف الاستفسار',
+                              message: `هل أنت متأكد من حذف استفسار "${inq.customerName}" من السجل؟`,
+                              onConfirm: () => deleteInquiry(inq.id)
+                            })
+                          }
                           className="p-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 transition-colors"
                           title="حذف الاستفسار"
                         >
@@ -1701,11 +1726,13 @@ export const AdminDashboard: React.FC = () => {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm(`هل أنت متأكد من حذف قسم: ${cat.name} وجميع صفحاته الفرعية؟`)) {
-                                deleteCategory(cat.id);
-                              }
-                            }}
+                            onClick={() =>
+                              setConfirmModal({
+                                title: 'حذف القسم',
+                                message: `هل أنت متأكد من حذف قسم "${cat.name}" وجميع صفحاته الفرعية؟`,
+                                onConfirm: () => deleteCategory(cat.id)
+                              })
+                            }
                             className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
                             title="حذف القسم"
                           >
@@ -1876,11 +1903,13 @@ export const AdminDashboard: React.FC = () => {
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm(`هل أنت متأكد من حذف الصفحة الفرعية: ${sp.name}؟`)) {
-                                    deleteSubPage(sp.id);
-                                  }
-                                }}
+                                onClick={() =>
+                                  setConfirmModal({
+                                    title: 'حذف الصفحة الفرعية',
+                                    message: `هل أنت متأكد من حذف الصفحة الفرعية: "${sp.name}"؟`,
+                                    onConfirm: () => deleteSubPage(sp.id)
+                                  })
+                                }
                                 className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
                                 title="حذف الصفحة الفرعية"
                               >
@@ -2128,11 +2157,13 @@ export const AdminDashboard: React.FC = () => {
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm(`حذف الكتالوج: ${cat.title}؟`)) {
-                                deletePaintCatalog(cat.id);
-                              }
-                            }}
+                            onClick={() =>
+                              setConfirmModal({
+                                title: 'حذف الكتالوج',
+                                message: `هل أنت متأكد من حذف كتالوج الألوان: "${cat.title}"؟`,
+                                onConfirm: () => deletePaintCatalog(cat.id)
+                              })
+                            }
                             className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
                             title="حذف"
                           >
@@ -2265,9 +2296,13 @@ export const AdminDashboard: React.FC = () => {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`حذف الميزة: ${ft.title}؟`)) deleteFeature(ft.id);
-                          }}
+                          onClick={() =>
+                            setConfirmModal({
+                              title: 'حذف الميزة',
+                              message: `هل أنت متأكد من حذف الميزة: "${ft.title}"؟`,
+                              onConfirm: () => deleteFeature(ft.id)
+                            })
+                          }
                           className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
                           title="حذف"
                         >
@@ -2401,9 +2436,13 @@ export const AdminDashboard: React.FC = () => {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`حذف الماركة: ${br.name}؟`)) deleteBrand(br.id);
-                          }}
+                          onClick={() =>
+                            setConfirmModal({
+                              title: 'حذف العلامة التجارية',
+                              message: `هل أنت متأكد من حذف الماركة: "${br.name}"؟`,
+                              onConfirm: () => deleteBrand(br.id)
+                            })
+                          }
                           className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
                           title="حذف"
                         >
@@ -2738,12 +2777,17 @@ export const AdminDashboard: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm('هل ترغب في استعادة الإعدادات والأقسام الأساسية للمتجر؟')) {
-                    resetAllData();
-                    setSettingsForm({ ...settings });
-                  }
-                }}
+                onClick={() =>
+                  setConfirmModal({
+                    title: 'استعادة الإعدادات الأساسية',
+                    message: 'هل ترغب في استعادة الإعدادات والأقسام الأساسية للمتجر؟',
+                    confirmLabel: 'استعادة الآن',
+                    onConfirm: async () => {
+                      await resetAllData();
+                      setSettingsForm({ ...settings });
+                    }
+                  })
+                }
                 className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 border border-slate-300 text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -2775,55 +2819,19 @@ export const AdminDashboard: React.FC = () => {
 
             <form onSubmit={handleSaveBanner} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
               <div>
-                <label className="font-bold text-slate-700 block mb-1">العنوان الرئيسي للبنر (يظهر بأعلى الصورة باحترافية) *</label>
+                <label className="font-bold text-slate-700 block mb-1">اسم البنر للرجوع إليه في لوحة التحكم (اختياري — لا يظهر للعملاء)</label>
                 <input
                   type="text"
-                  required
                   value={bannerForm.title}
                   onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })}
-                  placeholder="مثال: كل ما تحتاجه من الحدايد والبويات ولوازم المعمار..."
+                  placeholder="مثال: عرض سيكا جراوت 214..."
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">الشارة الترويجية (Badge)</label>
-                  <input
-                    type="text"
-                    value={bannerForm.badge}
-                    onChange={(e) => setBannerForm({ ...bannerForm, badge: e.target.value })}
-                    placeholder="مثال: المتجر الرسمي، خصم خاص..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">العنوان الفرعي (Subtitle)</label>
-                  <input
-                    type="text"
-                    value={bannerForm.subtitle}
-                    onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })}
-                    placeholder="مثال: بوش، توتال، وادفو، جوتن..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">النص التوضيحي للبنر (Description)</label>
-                <textarea
-                  rows={2}
-                  value={bannerForm.description}
-                  onChange={(e) => setBannerForm({ ...bannerForm, description: e.target.value })}
-                  placeholder="شرح إضافي مختصر عن المنتجات أو العروض..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-700">صورة البنر (رابط URL أو رفع مباشر من جهازك) *</label>
+                  <label className="font-bold text-slate-700">صورة البنر (تظهر للعملاء كاملة بدون أي كتابة فوقها أو حولها) *</label>
                   <label className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-200">
                     <Upload className="w-3.5 h-3.5" />
                     <span>{isCompressingImage ? 'جاري الضغط...' : 'رفع صورة من الجهاز'}</span>
@@ -2845,15 +2853,15 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              {/* Live Preview of image in modal */}
+              {/* Live Preview of full uncropped image in modal */}
               {bannerForm.image && (
                 <div className="p-2 bg-slate-100 rounded-xl border border-slate-200">
-                  <span className="text-[10px] text-slate-500 font-bold block mb-1">معاينة مصغرة للصورة:</span>
-                  <div className="w-full aspect-[21/9] rounded-lg overflow-hidden bg-slate-950">
+                  <span className="text-[10px] text-slate-500 font-bold block mb-1">معاينة كاملة للصورة كما ستظهر للعملاء:</span>
+                  <div className="w-full rounded-lg overflow-hidden bg-slate-950">
                     <img
                       src={bannerForm.image}
                       alt="معاينة"
-                      className="w-full h-full object-cover"
+                      className="w-full h-auto max-h-48 object-contain mx-auto block"
                     />
                   </div>
                 </div>
@@ -3315,6 +3323,59 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Confirmation Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 bg-rose-600 text-white flex items-center justify-between">
+              <h3 className="text-sm font-black flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                <span>{confirmModal.title}</span>
+              </h3>
+              <button
+                type="button"
+                disabled={isConfirmExecuting}
+                onClick={() => setConfirmModal(null)}
+                className="p-1 rounded-full hover:bg-white/15 text-white"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs sm:text-sm text-slate-700 font-bold leading-relaxed">
+                {confirmModal.message}
+              </p>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={isConfirmExecuting}
+                  onClick={() => setConfirmModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  disabled={isConfirmExecuting}
+                  onClick={async () => {
+                    setIsConfirmExecuting(true);
+                    try {
+                      await confirmModal.onConfirm();
+                    } finally {
+                      setIsConfirmExecuting(false);
+                      setConfirmModal(null);
+                    }
+                  }}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white font-black text-xs shadow"
+                >
+                  {isConfirmExecuting ? 'جاري التنفيذ...' : confirmModal.confirmLabel || 'تأكيد الحذف'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

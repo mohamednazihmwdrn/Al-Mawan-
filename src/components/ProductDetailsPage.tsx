@@ -57,12 +57,19 @@ export const ProductDetailsPage: React.FC = () => {
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [confirmDeleteReviewId, setConfirmDeleteReviewId] = useState<string | null>(null);
 
   const galleryImages = useMemo(() => {
     if (!selectedProduct) return [];
     const list = [selectedProduct.image, ...(selectedProduct.images || [])].filter(Boolean);
     return Array.from(new Set(list));
   }, [selectedProduct]);
+
+  useEffect(() => {
+    if (activeImageIdx >= galleryImages.length && galleryImages.length > 0) {
+      setActiveImageIdx(0);
+    }
+  }, [activeImageIdx, galleryImages.length]);
 
   useEffect(() => {
     if (!selectedProduct) {
@@ -196,7 +203,7 @@ export const ProductDetailsPage: React.FC = () => {
   };
 
   const handleDeleteReview = async (reviewId: string) => {
-    if (!confirm('هل تريد حذف هذا التعليق نهائياً؟')) return;
+    setConfirmDeleteReviewId(null);
     try {
       await deleteProductReview(selectedProduct.id, reviewId);
       if (isOwnerAuthenticated) {
@@ -766,14 +773,33 @@ export const ProductDetailsPage: React.FC = () => {
                           ))}
                         </div>
                         {isOwnerAuthenticated && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteReview(rev.id)}
-                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
-                            title="حذف التعليق"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          confirmDeleteReviewId === rev.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteReview(rev.id)}
+                                className="px-2 py-1 rounded-lg bg-rose-600 text-white text-[10px] font-black hover:bg-rose-700"
+                              >
+                                تأكيد الحذف
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteReviewId(null)}
+                                className="px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200"
+                              >
+                                إلغاء
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteReviewId(rev.id)}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                              title="حذف التعليق"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )
                         )}
                       </div>
                     </div>

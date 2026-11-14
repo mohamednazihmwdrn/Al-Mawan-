@@ -9,8 +9,10 @@ import {
   query,
   orderBy,
   limit,
-  getDoc,
+  getDocFromServer,
   getDocs,
+  where,
+  deleteField,
   writeBatch,
   Unsubscribe
 } from 'firebase/firestore';
@@ -407,7 +409,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return null;
     }
   });
-  const [fallbackSelectedProduct, setFallbackSelectedProduct] = useState<Product | null>(null);
+  const [singleSelectedProduct, setSingleSelectedProduct] = useState<Product | null>(null);
 
   const [isOwnerAuthenticated, setIsOwnerAuthenticated] = useState<boolean>(() => {
     try {
@@ -421,17 +423,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [secretClicks, setSecretClicks] = useState(0);
   const secretClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Core Data (Products start completely clean so owner adds real inventory)
+  // Core Data (Start empty before Firestore responds so deleted defaults never flash)
   const [settings, setSettings] = useState<StoreSettings>(INITIAL_SETTINGS);
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [subPages, setSubPages] = useState<SubPage[]>([]);
   const [paintCatalogs, setPaintCatalogs] = useState<PaintCatalog[]>([]);
-  const [banners, setBanners] = useState<BannerSlide[]>(INITIAL_BANNERS);
-  const [brands, setBrands] = useState<StoreBrand[]>(INITIAL_BRANDS);
-  const [features, setFeatures] = useState<StoreFeature[]>(INITIAL_FEATURES);
+  const [banners, setBanners] = useState<BannerSlide[]>([]);
+  const [brands, setBrands] = useState<StoreBrand[]>([]);
+  const [features, setFeatures] = useState<StoreFeature[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
+
+  const [productsLoaded, setProductsLoaded] = useState<boolean>(false);
+  const [categoriesLoaded, setCategoriesLoaded] = useState<boolean>(false);
+  const [subPagesLoaded, setSubPagesLoaded] = useState<boolean>(false);
 
   const [productLimit, setProductLimit] = useState<number>(PRODUCT_PAGE_SIZE);
   const [cloudProductCount, setCloudProductCount] = useState<number>(0);
@@ -465,15 +471,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isPaintStudioOpen, setIsPaintStudioOpen] = useState(false);
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [quickViewProductId, setQuickViewProductId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Derive live selectedProduct from Firestore products list
-  const selectedProduct =
-    (selectedProductId
-      ? products.find((p) => p.id === selectedProductId) ||
-        (fallbackSelectedProduct?.id === selectedProductId ? fallbackSelectedProduct : null)
-      : null);
+  const hasMoreProducts = cloudProductCount >= productLimit;
+
+  // Derive live quickViewProduct from Firestore products list
+  const quickViewProduct = quickViewProductId
+    ? products.find((p) => p.id === quickViewProductId) || null
+    : null;
+
+  const setQuickViewProduct = useCallback((product: Product | null) => {
+    setQuickViewProductId(product ? product.id : null);
+  }, []);
+
+  // Derive live selectedProduct from Firestore products list or single-doc listener
+  const selectedProduct = selectedProductId
+    ? products.find((p) => p.id === selectedProductId) ||
+      (singleSelectedProduct?.id === selectedProductId ? singleSelectedProduct : null)
+    : null;
 
   // Sync URL hash for shareable product detail pages
   useEffect(() => {
@@ -487,6 +503,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       } else if (activeView === 'product') {
         setSelectedProductId(null);
+        setSingleSelectedProduct(null);
         setActiveView('storefront');
       }
     };
@@ -501,7 +518,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [selectedProductId, selectedProduct, activeView]);
 
   const openProductDetails = useCallback((product: Product) => {
-    setFallbackSelectedProduct(product);
+    setSingleSelectedProduct(product);
     setSelectedProductId(product.id);
     setActiveView('product');
     try {
@@ -514,7 +531,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const closeProductDetails = useCallback(() => {
     setSelectedProductId(null);
-    setFallbackSelectedProduct(null);
+    setSingleSelectedProduct(null);
     setActiveView('storefront');
     try {
       if (window.location.hash.startsWith('#product-')) {
@@ -524,6 +541,128 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // ignore
     }
   }, []);
+
+  // Live watch / auto-close selectedProduct when deleted or updated outside the initial page
+  useEffect(() => {
+    if (!selectedProductId || !productsLoaded) return;
+    const inLoadedList = products.some((p) => p.id === selectedProductId);
+    if (inLoadedList) {
+      return;
+    }
+
+    if (!hasMoreProducts) {
+      setSingleSelectedProduct(null);
+      setSelectedProductId(null);
+      if (activeView === 'product') {
+        setActiveView('storefront');
+      }
+      try {
+        if (window.location.hash.startsWith('#product-')) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
+    const unsub = onSnapshot(
+      doc(db, 'products', selectedProductId),
+      (snap) => {
+        if (snap.exists()) {
+          setSingleSelectedProduct({ ...(snap.data() as Product), id: snap.id });
+        } else {
+          setSingleSelectedProduct(null);
+          setSelectedProductId(null);
+          if (activeView === 'product') {
+            setActiveView('storefront');
+          }
+          try {
+            if (window.location.hash.startsWith('#product-')) {
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.GET, `products/${selectedProductId}`);
+      }
+    );
+    return () => unsub();
+  }, [selectedProductId, products, productsLoaded, hasMoreProducts, activeView]);
+
+  // Silently close quickViewProduct if deleted from Firestore
+  useEffect(() => {
+    if (!quickViewProductId || !productsLoaded) return;
+    if (!products.some((p) => p.id === quickViewProductId)) {
+      setQuickViewProductId(null);
+    }
+  }, [quickViewProductId, products, productsLoaded]);
+
+  // Silently reset selectedCategoryId / selectedSubPageId if deleted from Firestore
+  useEffect(() => {
+    if (categoriesLoaded && selectedCategoryId && !categories.some((c) => c.id === selectedCategoryId)) {
+      _setSelectedCategoryId(null);
+      setSelectedSubPageId(null);
+    }
+  }, [categories, categoriesLoaded, selectedCategoryId]);
+
+  useEffect(() => {
+    if (subPagesLoaded && selectedSubPageId && !subPages.some((sp) => sp.id === selectedSubPageId)) {
+      setSelectedSubPageId(null);
+    }
+  }, [subPages, subPagesLoaded, selectedSubPageId]);
+
+  // Silently sync Cart items with live Firestore products (updates prices/names/images and drops deleted products)
+  useEffect(() => {
+    if (!productsLoaded) return;
+    setCart((prev) => {
+      if (prev.length === 0) return prev;
+      let changed = false;
+      const next: CartItem[] = [];
+
+      for (const item of prev) {
+        const isCustomPaint = item.productId.startsWith('paint-custom-') || Boolean(item.paintDetails);
+        if (isCustomPaint) {
+          next.push(item);
+          continue;
+        }
+
+        const liveProd = products.find((p) => p.id === item.productId);
+        if (!liveProd) {
+          if (!hasMoreProducts) {
+            changed = true;
+            continue;
+          }
+          next.push(item);
+          continue;
+        }
+
+        const p = item.product;
+        const needsUpdate =
+          p.updatedAt !== liveProd.updatedAt ||
+          p.price !== liveProd.price ||
+          p.name !== liveProd.name ||
+          p.image !== liveProd.image ||
+          p.inStock !== liveProd.inStock ||
+          p.brand !== liveProd.brand ||
+          p.categoryId !== liveProd.categoryId ||
+          p.categoryName !== liveProd.categoryName ||
+          p.unit !== liveProd.unit;
+
+        if (needsUpdate) {
+          changed = true;
+          next.push({ ...item, product: liveProd });
+        } else {
+          next.push(item);
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [products, productsLoaded, hasMoreProducts]);
 
   // Save Cart to LocalStorage
   useEffect(() => {
@@ -543,7 +682,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIsSyncing(true);
       try {
         if (!force) {
-          const settingsSnap = await getDoc(doc(db, 'settings', 'store'));
+          const settingsSnap = await getDocFromServer(doc(db, 'settings', 'store'));
           if (settingsSnap.exists()) {
             setIsCloudSeeded(true);
             setIsSyncing(false);
@@ -675,7 +814,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setBanners(loaded);
           setLastSyncedTime(Date.now());
         } else {
-          setBanners(INITIAL_BANNERS);
+          setBanners([]);
         }
       },
       (err) => {
@@ -691,12 +830,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsub = onSnapshot(
       q,
       (snap) => {
+        setCategoriesLoaded(true);
         if (!snap.empty) {
           const loaded = snap.docs.map((d) => ({ ...(d.data() as Category), id: d.id }));
           setCategories(loaded);
           setLastSyncedTime(Date.now());
         } else {
-          setCategories(INITIAL_CATEGORIES);
+          setCategories([]);
         }
       },
       (err) => {
@@ -712,6 +852,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsub = onSnapshot(
       q,
       (snap) => {
+        setSubPagesLoaded(true);
         if (!snap.empty) {
           const loaded = snap.docs
             .map((d) => ({ ...(d.data() as SubPage), id: d.id }))
@@ -805,21 +946,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
           setLastSyncedTime(Date.now());
         } else {
-          setBrands(INITIAL_BRANDS);
-          if (!brandsMigrationAttemptedRef.current && localStorage.getItem('almawan_brands_migrated_v2') !== '1') {
-            brandsMigrationAttemptedRef.current = true;
-            const batch = writeBatch(db);
-            INITIAL_BRANDS.forEach((br, idx) => {
-              batch.set(doc(db, 'brands', sanitizeId(br.id)), buildBrandPayload(br, idx));
-            });
-            batch.commit().then(() => {
-              try {
-                localStorage.setItem('almawan_brands_migrated_v2', '1');
-              } catch {
-                // ignore
-              }
-            }).catch(() => {});
-          }
+          setBrands([]);
         }
       },
       (err) => {
@@ -842,7 +969,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setFeatures(loaded);
           setLastSyncedTime(Date.now());
         } else {
-          setFeatures(INITIAL_FEATURES);
+          setFeatures([]);
         }
       },
       (err) => {
@@ -862,6 +989,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsub = onSnapshot(
       q,
       (snap) => {
+        setProductsLoaded(true);
         setCloudProductCount(snap.size);
         if (!snap.empty) {
           const loaded = snap.docs.map((d) => ({ ...(d.data() as Product), id: d.id }));
@@ -1212,6 +1340,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: Category = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'categories', id), buildCategoryPayload(merged));
+      if (merged.name.trim() !== current.name.trim()) {
+        const prodSnap = await getDocs(
+          query(collection(db, 'products'), where('categoryId', '==', id))
+        );
+        if (!prodSnap.empty) {
+          const nextCatName = merged.name.trim().slice(0, 120) || 'عام';
+          const docs = prodSnap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(db);
+            docs.slice(i, i + 400).forEach((d) => {
+              batch.update(d.ref, {
+                categoryName: nextCatName,
+                updatedAt: Date.now()
+              });
+            });
+            await batch.commit();
+          }
+        }
+      }
       setLastSyncedTime(Date.now());
       showToast('تم تحديث بيانات القسم بنجاح');
     } catch (err) {
@@ -1226,11 +1373,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'categories', id));
-      const childSubPages = subPages.filter((sp) => sp.categoryId === id);
-      if (childSubPages.length > 0) {
-        const batch = writeBatch(db);
-        childSubPages.forEach((sp) => batch.delete(doc(db, 'subpages', sp.id)));
-        await batch.commit();
+
+      const subSnap = await getDocs(
+        query(collection(db, 'subpages'), where('categoryId', '==', id))
+      );
+      if (!subSnap.empty) {
+        const docs = subSnap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+
+      const prodSnap = await getDocs(
+        query(collection(db, 'products'), where('categoryId', '==', id))
+      );
+      if (!prodSnap.empty) {
+        const docs = prodSnap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + 400).forEach((d) => {
+            batch.update(d.ref, {
+              categoryId: 'general',
+              categoryName: 'عام',
+              subPageId: deleteField(),
+              subPageName: deleteField(),
+              updatedAt: Date.now()
+            });
+          });
+          await batch.commit();
+        }
+      }
+
+      if (selectedCategoryId === id) {
+        setSelectedCategoryId(null);
       }
       setLastSyncedTime(Date.now());
       showToast('تم حذف القسم وصفحاته الفرعية');
@@ -1271,6 +1448,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: SubPage = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'subpages', id), buildSubPagePayload(merged));
+      if (merged.name.trim() !== current.name.trim() || merged.categoryId !== current.categoryId) {
+        const prodSnap = await getDocs(
+          query(collection(db, 'products'), where('subPageId', '==', id))
+        );
+        if (!prodSnap.empty) {
+          const nextCat = categories.find((c) => c.id === merged.categoryId);
+          const nextSpName = merged.name.trim().slice(0, 120);
+          const docs = prodSnap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(db);
+            docs.slice(i, i + 400).forEach((d) => {
+              const patch: Record<string, unknown> = {
+                subPageName: nextSpName,
+                updatedAt: Date.now()
+              };
+              if (merged.categoryId !== current.categoryId) {
+                patch.categoryId = sanitizeId(merged.categoryId);
+                patch.categoryName = String(nextCat?.name || 'عام').trim().slice(0, 120);
+              }
+              batch.update(d.ref, patch);
+            });
+            await batch.commit();
+          }
+        }
+      }
       setLastSyncedTime(Date.now());
       showToast('تم تحديث الصفحة الفرعية بنجاح');
     } catch (err) {
@@ -1285,6 +1487,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'subpages', id));
+      const prodSnap = await getDocs(
+        query(collection(db, 'products'), where('subPageId', '==', id))
+      );
+      if (!prodSnap.empty) {
+        const docs = prodSnap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + 400).forEach((d) => {
+            batch.update(d.ref, {
+              subPageId: deleteField(),
+              subPageName: deleteField(),
+              updatedAt: Date.now()
+            });
+          });
+          await batch.commit();
+        }
+      }
       if (selectedSubPageId === id) {
         setSelectedSubPageId(null);
       }
@@ -1382,6 +1601,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: StoreBrand = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'brands', id), buildBrandPayload(merged));
+      if (merged.name.trim() !== current.name.trim()) {
+        const prodSnap = await getDocs(
+          query(collection(db, 'products'), where('brand', '==', current.name))
+        );
+        if (!prodSnap.empty) {
+          const nextBrandName = merged.name.trim().slice(0, 100) || 'الموان';
+          const docs = prodSnap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(db);
+            docs.slice(i, i + 400).forEach((d) => {
+              batch.update(d.ref, {
+                brand: nextBrandName,
+                updatedAt: Date.now()
+              });
+            });
+            await batch.commit();
+          }
+        }
+      }
       setLastSyncedTime(Date.now());
       showToast('تم تحديث العلامة التجارية بنجاح');
     } catch (err) {
@@ -1675,7 +1913,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartSubtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const hasMoreProducts = cloudProductCount >= productLimit;
 
   return (
     <StoreContext.Provider

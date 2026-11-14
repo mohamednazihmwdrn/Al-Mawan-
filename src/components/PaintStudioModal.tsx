@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { COLOR_PALETTES } from '../data/initialData';
-import { PaintCatalog } from '../types/store';
 import {
   X,
   Palette,
@@ -58,9 +57,18 @@ export const PaintStudioModal: React.FC = () => {
   const [roomHeight, setRoomHeight] = useState<number>(3);
   const [coats, setCoats] = useState<number>(2);
 
-  // Active catalog preview (PDF or Image lightbox)
-  const [viewingCatalog, setViewingCatalog] = useState<PaintCatalog | null>(null);
+  // Active catalog preview (PDF or Image lightbox) derived live from Firestore catalogs
+  const [viewingCatalogId, setViewingCatalogId] = useState<string | null>(null);
+  const viewingCatalog = viewingCatalogId
+    ? paintCatalogs.find((c) => c.id === viewingCatalogId) || null
+    : null;
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (viewingCatalogId && !viewingCatalog) {
+      setViewingCatalogId(null);
+    }
+  }, [viewingCatalogId, viewingCatalog]);
 
   useEffect(() => {
     if (viewingCatalog?.fileType === 'pdf' && viewingCatalog.fileUrl.startsWith('data:')) {
@@ -107,7 +115,7 @@ export const PaintStudioModal: React.FC = () => {
       hex: activeColorHex,
       category: 'كتالوج'
     });
-    setViewingCatalog(null);
+    setViewingCatalogId(null);
     setActiveTab('studio');
     showToast(`تم اعتماد كود اللون (${trimmed.toUpperCase()}) بنجاح — يمكنك الآن تحديد التشطيب وإرساله للسلة أو واتساب!`);
   };
@@ -501,7 +509,7 @@ export const PaintStudioModal: React.FC = () => {
                       {cat.fileType === 'image' ? (
                         <button
                           type="button"
-                          onClick={() => setViewingCatalog(cat)}
+                          onClick={() => setViewingCatalogId(cat.id)}
                           className="relative aspect-[16/10] bg-slate-100 overflow-hidden group w-full block"
                         >
                           <img
@@ -521,7 +529,7 @@ export const PaintStudioModal: React.FC = () => {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setViewingCatalog(cat)}
+                          onClick={() => setViewingCatalogId(cat.id)}
                           className="relative aspect-[16/10] bg-gradient-to-br from-rose-50 via-white to-amber-50 border-b border-slate-100 flex flex-col items-center justify-center p-4 group w-full"
                         >
                           <div className="w-14 h-14 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform mb-2">
@@ -556,7 +564,7 @@ export const PaintStudioModal: React.FC = () => {
                         <div className="pt-2 flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => setViewingCatalog(cat)}
+                            onClick={() => setViewingCatalogId(cat.id)}
                             className="flex-1 py-2 rounded-xl bg-[#132d66] hover:bg-[#0e224d] text-white text-xs font-black transition-colors flex items-center justify-center gap-1.5"
                           >
                             <BookOpen className="w-3.5 h-3.5" />
@@ -648,7 +656,7 @@ export const PaintStudioModal: React.FC = () => {
                 )}
                 <button
                   type="button"
-                  onClick={() => setViewingCatalog(null)}
+                  onClick={() => setViewingCatalogId(null)}
                   className="p-1.5 rounded-full bg-white/10 hover:bg-white/25 text-white"
                 >
                   <X className="w-5 h-5" />
