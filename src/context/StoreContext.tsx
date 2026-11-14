@@ -17,14 +17,6 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import {
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  signOut,
-  User
-} from 'firebase/auth';
-import {
   Product,
   ProductReview,
   ContactInquiry,
@@ -46,13 +38,12 @@ import {
   INITIAL_BRANDS,
   INITIAL_FEATURES,
   LEGACY_DEMO_PRODUCT_IDS,
+  LEGACY_DEMO_BANNER_IDS,
+  LEGACY_DEMO_CATEGORY_IDS,
   LEGACY_TEXT_BRAND_IDS
 } from '../data/initialData';
 import {
   db,
-  auth,
-  googleProvider,
-  OWNER_ADMIN_EMAIL,
   OperationType,
   handleFirestoreError
 } from '../firebase';
@@ -79,16 +70,8 @@ interface StoreContextType {
   openProductDetails: (product: Product) => void;
   closeProductDetails: () => void;
 
-  // Secret Owner Auth & Firebase Verified Owner Session
+  // Secret Owner Auth & Cloud Seed
   isOwnerAuthenticated: boolean;
-  isFirebaseAdmin: boolean;
-  firebaseUserEmail: string | null;
-  authReady: boolean;
-  isAuthBusy: boolean;
-  authError: string | null;
-  clearAuthError: () => void;
-  loginOwnerWithGoogle: () => Promise<boolean>;
-  loginOwnerWithRedirect: () => Promise<void>;
   verifyOwnerPassword: (password: string) => Promise<boolean>;
   logoutOwner: () => Promise<void>;
   isSecretModalOpen: boolean;
@@ -437,21 +420,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return false;
     }
   });
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(() => auth.currentUser);
-  const [isListedInAdmins, setIsListedInAdmins] = useState<boolean>(false);
-  const [authReady, setAuthReady] = useState<boolean>(false);
-  const [isAuthBusy, setIsAuthBusy] = useState<boolean>(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const isFirebaseAdmin = Boolean(
-    firebaseUser &&
-      firebaseUser.emailVerified &&
-      (firebaseUser.email?.toLowerCase() === OWNER_ADMIN_EMAIL.toLowerCase() || isListedInAdmins)
-  );
-  const isFirebaseAdminRef = useRef<boolean>(isFirebaseAdmin);
-  useEffect(() => {
-    isFirebaseAdminRef.current = isFirebaseAdmin;
-  }, [isFirebaseAdmin]);
 
   const [isSecretModalOpen, setIsSecretModalOpen] = useState(false);
   const [secretClicks, setSecretClicks] = useState(0);
@@ -710,74 +678,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 3400);
   }, []);
 
-  // Sync Firebase Auth state & handle redirect result (for mobile/popup-blocked fallback)
-  useEffect(() => {
-    let active = true;
-
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (!active || !result?.user) return;
-        const u = result.user;
-        const email = u.email?.toLowerCase() || '';
-        if (!u.emailVerified || email !== OWNER_ADMIN_EMAIL.toLowerCase()) {
-          try {
-            const adminDoc = await getDocFromServer(doc(db, 'admins', u.uid));
-            if (u.emailVerified && adminDoc.exists()) {
-              if (active) setIsListedInAdmins(true);
-              if (sessionStorage.getItem(AUTH_KEY) === 'true') {
-                setActiveView('admin');
-              }
-              return;
-            }
-          } catch {
-            // not an admin doc
-          }
-          await signOut(auth);
-          if (active) {
-            setAuthError(
-              'الحساب المختار غير مصرح له. يرجى تسجيل الدخول بحساب المالك الرسمي فقط.'
-            );
-          }
-          return;
-        }
-        if (sessionStorage.getItem(AUTH_KEY) === 'true') {
-          setActiveView('admin');
-        }
-      })
-      .catch((err: unknown) => {
-        if (!active) return;
-        const code = (err as { code?: string })?.code || '';
-        if (code && code !== 'auth/no-current-user') {
-          setAuthError(`تعذر إتمام تسجيل الدخول (${code}). حاول مرة أخرى.`);
-        }
-      });
-
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!active) return;
-      setFirebaseUser(user);
-      if (user && user.emailVerified && user.email?.toLowerCase() !== OWNER_ADMIN_EMAIL.toLowerCase()) {
-        try {
-          const adminDoc = await getDocFromServer(doc(db, 'admins', user.uid));
-          if (active) setIsListedInAdmins(adminDoc.exists());
-        } catch {
-          if (active) setIsListedInAdmins(false);
-        }
-      } else {
-        setIsListedInAdmins(false);
-      }
-      if (active) setAuthReady(true);
-    });
-
-    return () => {
-      active = false;
-      unsub();
-    };
-  }, []);
-
-  // Seed default store structure (ONLY allowed for verified store owner/admin)
+  // Seed default store structure (settings, partner brands, features — NO dummy products/banners/categories)
   const seedCloudDefaults = useCallback(
     async (force = false) => {
-      if (!isFirebaseAdminRef.current) return;
       setIsSyncing(true);
       try {
         if (!force) {
@@ -794,12 +697,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Settings
         batch.set(doc(db, 'settings', 'store'), buildSettingsPayload(INITIAL_SETTINGS));
 
-        // Banners
+        // Banners (empty by default unless owner adds them)
         INITIAL_BANNERS.forEach((b, idx) => {
           batch.set(doc(db, 'banners', sanitizeId(b.id)), buildBannerPayload(b, idx));
         });
 
-        // Categories
+        // Categories (empty by default unless owner adds them)
         INITIAL_CATEGORIES.forEach((c) => {
           batch.set(doc(db, 'categories', sanitizeId(c.id)), buildCategoryPayload(c));
         });
@@ -818,7 +721,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsCloudSeeded(true);
         setLastSyncedTime(Date.now());
         if (force) {
-          showToast('تمت مزامنة إعدادات وأقسام المتجر على السحابة بنجاح!');
+          showToast('تمت مزامنة إعدادات المتجر على السحابة بنجاح!');
         }
       } catch (err) {
         console.warn('Cloud seed notice:', err);
@@ -829,29 +732,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [showToast]
   );
 
-  // Auto-seed store settings & sections once for authenticated owner if settings/store is missing
+  // Auto-seed store settings & partner brands once if settings/store is missing
   useEffect(() => {
-    if (!isFirebaseAdmin || autoSeedAttemptedRef.current) return;
+    if (autoSeedAttemptedRef.current) return;
     autoSeedAttemptedRef.current = true;
     seedCloudDefaults(false).catch(() => {});
-  }, [isFirebaseAdmin, seedCloudDefaults]);
+  }, [seedCloudDefaults]);
 
-  // One-time automatic cleanup of legacy demo products (only runs when authenticated owner is logged in)
+  // One-time automatic cleanup of ALL legacy dummy products, dummy banners, and dummy categories
   useEffect(() => {
-    if (!isFirebaseAdmin || demoCleanupAttemptedRef.current) return;
-    if (typeof window !== 'undefined' && localStorage.getItem('almawan_demo_cleaned_v1') === '1') {
+    if (demoCleanupAttemptedRef.current) return;
+    if (!productsLoaded || !categoriesLoaded || !subPagesLoaded) return;
+    if (typeof window !== 'undefined' && localStorage.getItem('almawan_demo_cleaned_v2') === '1') {
       demoCleanupAttemptedRef.current = true;
       return;
     }
-    const legacyFound = products.filter((p) => LEGACY_DEMO_PRODUCT_IDS.includes(p.id));
-    if (legacyFound.length === 0) {
-      if (products.length > 0) {
-        demoCleanupAttemptedRef.current = true;
-        try {
-          localStorage.setItem('almawan_demo_cleaned_v1', '1');
-        } catch {
-          // ignore
-        }
+
+    const legacyProducts = products.filter((p) => LEGACY_DEMO_PRODUCT_IDS.includes(p.id));
+    const legacyBanners = banners.filter((b) => LEGACY_DEMO_BANNER_IDS.includes(b.id));
+    const legacyCategories = categories.filter((c) => LEGACY_DEMO_CATEGORY_IDS.includes(c.id));
+    const legacySubPages = subPages.filter((sp) => LEGACY_DEMO_CATEGORY_IDS.includes(sp.categoryId));
+
+    if (
+      legacyProducts.length === 0 &&
+      legacyBanners.length === 0 &&
+      legacyCategories.length === 0 &&
+      legacySubPages.length === 0
+    ) {
+      demoCleanupAttemptedRef.current = true;
+      try {
+        localStorage.setItem('almawan_demo_cleaned_v2', '1');
+      } catch {
+        // ignore
       }
       return;
     }
@@ -859,13 +771,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     demoCleanupAttemptedRef.current = true;
     const cleanLegacy = async () => {
       try {
-        const batch = writeBatch(db);
-        legacyFound.forEach((p) => {
-          batch.delete(doc(db, 'products', p.id));
-        });
-        await batch.commit();
+        const refs = [
+          ...legacyProducts.map((p) => doc(db, 'products', p.id)),
+          ...legacyBanners.map((b) => doc(db, 'banners', b.id)),
+          ...legacyCategories.map((c) => doc(db, 'categories', c.id)),
+          ...legacySubPages.map((sp) => doc(db, 'subpages', sp.id))
+        ];
+        for (let i = 0; i < refs.length; i += 400) {
+          const batch = writeBatch(db);
+          refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+          await batch.commit();
+        }
         try {
-          localStorage.setItem('almawan_demo_cleaned_v1', '1');
+          localStorage.setItem('almawan_demo_cleaned_v2', '1');
         } catch {
           // ignore
         }
@@ -874,7 +792,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     };
     cleanLegacy();
-  }, [products, isFirebaseAdmin]);
+  }, [products, banners, categories, subPages, productsLoaded, categoriesLoaded, subPagesLoaded]);
 
   // --- Real-Time Firestore Listeners ---
 
@@ -1005,7 +923,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             loaded.every((b) => LEGACY_TEXT_BRAND_IDS.includes(b.id) && !b.logoUrl);
 
           if (
-            isFirebaseAdminRef.current &&
             onlyLegacyTextBrands &&
             !brandsMigrationAttemptedRef.current &&
             localStorage.getItem('almawan_brands_migrated_v2') !== '1'
@@ -1033,7 +950,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 b.id === 'brand-ilock' ? { ...b, label: 'آي لوك لأدوات الكهرباء' } : b
               );
               setBrands(corrected);
-              if (isFirebaseAdminRef.current && !ilockLabelFixedRef.current) {
+              if (!ilockLabelFixedRef.current) {
                 ilockLabelFixedRef.current = true;
                 updateDoc(doc(db, 'brands', 'brand-ilock'), {
                   label: 'آي لوك لأدوات الكهرباء'
@@ -1109,11 +1026,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProductLimit((prev) => prev + PRODUCT_PAGE_SIZE);
   };
 
-  // --- Admin-Only Protected Listeners for Orders & Inquiries (PII isolated to verified owner) ---
+  // --- Owner-Session Listeners for Orders & Inquiries ---
 
   // 5. Orders listener
   useEffect(() => {
-    if (!isOwnerAuthenticated || !isFirebaseAdmin) {
+    if (!isOwnerAuthenticated) {
       setOrders([]);
       return;
     }
@@ -1130,11 +1047,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     );
     return () => unsub();
-  }, [isOwnerAuthenticated, isFirebaseAdmin]);
+  }, [isOwnerAuthenticated]);
 
   // 6. Inquiries listener
   useEffect(() => {
-    if (!isOwnerAuthenticated || !isFirebaseAdmin) {
+    if (!isOwnerAuthenticated) {
       setInquiries([]);
       return;
     }
@@ -1151,9 +1068,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     );
     return () => unsub();
-  }, [isOwnerAuthenticated, isFirebaseAdmin]);
+  }, [isOwnerAuthenticated]);
 
-  // --- Secret 10-Click Trigger & Dual-Layer Owner Auth (Secret PIN + Verified Google Owner Account) ---
+  // --- Secret 10-Click Trigger & Owner Auth ---
 
   const triggerSecretClick = () => {
     if (secretClickTimeoutRef.current) {
@@ -1174,84 +1091,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 4500);
   };
 
-  const clearAuthError = useCallback(() => {
-    setAuthError(null);
-  }, []);
-
-  const loginOwnerWithGoogle = useCallback(async (): Promise<boolean> => {
-    setAuthError(null);
-    setIsAuthBusy(true);
-    try {
-      // IMPORTANT: Call signInWithPopup immediately on user gesture without prior awaits so mobile popups aren't blocked
-      const cred = await signInWithPopup(auth, googleProvider);
-      const u = cred.user;
-      const email = u.email?.toLowerCase() || '';
-
-      if (u.emailVerified && email === OWNER_ADMIN_EMAIL.toLowerCase()) {
-        setFirebaseUser(u);
-        showToast('تم التحقق من حساب المالك بنجاح! يمكنك الآن النشر والتعديل.');
-        return true;
-      }
-
-      if (u.emailVerified) {
-        try {
-          const adminDoc = await getDocFromServer(doc(db, 'admins', u.uid));
-          if (adminDoc.exists()) {
-            setIsListedInAdmins(true);
-            setFirebaseUser(u);
-            showToast('تم التحقق من صلاحيات إدارة المتجر بنجاح!');
-            return true;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      await signOut(auth);
-      setFirebaseUser(null);
-      setAuthError(
-        'الحساب المختار غير مصرح له بنشر المنتجات. يرجى تسجيل الدخول بحساب المالك الرسمي فقط.'
-      );
-      return false;
-    } catch (err: unknown) {
-      const code = (err as { code?: string })?.code || '';
-      let msg = 'تعذر إتمام التحقق من حساب جوجل. يرجى المحاولة مرة أخرى.';
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        msg = 'تم إغلاق نافذة تسجيل الدخول قبل إتمام التحقق. اضغط مرة أخرى واختر حساب المالك.';
-      } else if (code === 'auth/popup-blocked') {
-        msg = 'المتصفح حظر النافذة المنبثقة. اسمح بالنوافذ المنبثقة أو استخدم زر "تسجيل الدخول بإعادة التوجيه" بالأسفل.';
-      } else if (code === 'auth/unauthorized-domain') {
-        msg = `النطاق الحالي (${window.location.hostname}) غير مصرّح به في Firebase Auth. تأكد من فتح الرابط الرسمي للموقع.`;
-      } else if (code === 'auth/operation-not-supported-in-this-environment') {
-        msg = 'المتصفح الحالي لا يدعم النوافذ المنبثقة لتسجيل الدخول. استخدم زر "تسجيل الدخول بإعادة التوجيه" أو افتح الموقع في متصفح Chrome.';
-      } else if (code === 'auth/network-request-failed') {
-        msg = 'تعذر الاتصال بخوادم التحقق. يرجى التأكد من اتصال الإنترنت ثم إعادة المحاولة.';
-      } else if (err instanceof Error && err.message) {
-        msg = `خطأ في توثيق الحساب (${code || 'auth'}): ${err.message}`;
-      }
-      setAuthError(msg);
-      return false;
-    } finally {
-      setIsAuthBusy(false);
-    }
-  }, [showToast]);
-
-  const loginOwnerWithRedirect = useCallback(async () => {
-    setAuthError(null);
-    setIsAuthBusy(true);
-    try {
-      await signInWithRedirect(auth, googleProvider);
-    } catch (err: unknown) {
-      const code = (err as { code?: string })?.code || '';
-      setAuthError(
-        err instanceof Error
-          ? `تعذر بدء إعادة التوجيه (${code || 'auth'}): ${err.message}`
-          : 'تعذر بدء إعادة التوجيه.'
-      );
-      setIsAuthBusy(false);
-    }
-  }, []);
-
   const verifyOwnerPassword = async (password: string): Promise<boolean> => {
     if (password === '1272000') {
       setIsOwnerAuthenticated(true);
@@ -1265,24 +1104,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsOwnerAuthenticated(false);
     sessionStorage.removeItem(AUTH_KEY);
     setActiveView('storefront');
-    try {
-      await signOut(auth);
-      setFirebaseUser(null);
-      setIsListedInAdmins(false);
-    } catch {
-      // ignore
-    }
-    showToast('تم تسجيل الخروج وقفل لوحة التحكم وتأمين الجلسة.');
+    showToast('تم تسجيل الخروج وقفل لوحة التحكم.');
   };
 
   const ensureOwnerSessionOrThrow = () => {
     if (!isOwnerAuthenticated) {
       showToast('يرجى فتح لوحة تحكم المالك أولاً.');
       throw new Error('OWNER_AUTH_REQUIRED');
-    }
-    if (!isFirebaseAdminRef.current) {
-      showToast('يرجى الضغط على «توثيق حساب المالك الآن» في أعلى لوحة التحكم لتطبيق النشر أو التعديل في قاعدة البيانات.');
-      throw new Error('OWNER_FIREBASE_AUTH_REQUIRED');
     }
   };
 
@@ -2113,14 +1941,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         openProductDetails,
         closeProductDetails,
         isOwnerAuthenticated,
-        isFirebaseAdmin,
-        firebaseUserEmail: firebaseUser?.email || null,
-        authReady,
-        isAuthBusy,
-        authError,
-        clearAuthError,
-        loginOwnerWithGoogle,
-        loginOwnerWithRedirect,
         verifyOwnerPassword,
         logoutOwner,
         isSecretModalOpen,

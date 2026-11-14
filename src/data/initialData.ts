@@ -40,97 +40,20 @@ export const INITIAL_SETTINGS: StoreSettings = {
   showPaintStudio: true
 };
 
-export const INITIAL_BANNERS: BannerSlide[] = [
-  {
-    id: "banner-1",
-    badge: "المتجر الرسمي المعتمد",
-    title: "كل ما تحتاجه من الحدايد والبويات ولوازم المعمار",
-    subtitle: "وكلاء وموزعون لأكبر الماركات الأصلية (بوش، توتال، وادفو)",
-    description: "توفير كافة مستلزمات البناء والمقاولات والورش بأفضل الأسعار وأعلى جودة مع إمكانية التوصيل والشحن الفوري.",
-    image: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=80",
-    buttonText: "تصفح العدد الكهربائية",
-    buttonActionType: "category",
-    buttonTarget: "power-tools",
-    active: true,
-    sortOrder: 0
-  },
-  {
-    id: "banner-2",
-    badge: "تكنولوجيا ألوان حديثة",
-    title: "أحدث ماكينة تلوين وخلط بويات بالكمبيوتر فوري",
-    subtitle: "أكثر من 15,000 درجة لون من كروت جوتن وسايبس وكبسي",
-    description: "اختر كود اللون واستلم دهانك في دقائق بأعلى دقة تغطية ومقاومة للغسيل مع حاسبة ذكية لكمية الجالونات.",
-    image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=1200&q=80",
-    buttonText: "جرّب كمبيوتر الألوان الآن",
-    buttonActionType: "paint_studio",
-    active: true,
-    sortOrder: 1
-  },
-  {
-    id: "banner-3",
-    badge: "خدمة المقاولين وأصحاب المعمار",
-    title: "لوازم معمار وحدايد ومعدات ورش وهواء احترافية",
-    subtitle: "أسعار جملة وتخفيضات خاصة على كميات المسامير والمعدات",
-    description: "مسامير، زوايا، فيشر، كالونات، خراطيم بولي يوريثين، وبساتم هواء أصلية معتمدة.",
-    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=1200&q=80",
-    buttonText: "عرض لوازم المعمار",
-    buttonActionType: "category",
-    buttonTarget: "construction-supplies",
-    active: true,
-    sortOrder: 2
-  }
-];
+export const INITIAL_BANNERS: BannerSlide[] = [];
 
-export const INITIAL_CATEGORIES: Category[] = [
-  {
-    id: "power-tools",
-    name: "معدات كهربائية وبطارية",
-    iconName: "Zap",
-    description: "شنيور، صواريخ، هيلتي، بلاور وماكينات غسيل ضغط عالي أصلية",
-    image: "https://images.unsplash.com/photo-1504148455328-c376907d081c?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "hand-tools",
-    name: "العدد اليدوية",
-    iconName: "Wrench",
-    description: "مفاتيح، بنس، مطارق، أطقم لقم ومفكات احترافية",
-    image: "https://images.unsplash.com/photo-1581783898377-1c85bf937427?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "computer-paints",
-    name: "خلط ألوان بالكمبيوتر",
-    iconName: "Palette",
-    description: "تلوين فوري بأحدث ماكينات الكمبيوتر لأكثر من 10,000 درجة لون",
-    image: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "paints-coatings",
-    name: "البويات والدهانات",
-    iconName: "Paintbrush",
-    description: "دهانات بلاستيك، لاكيه، عوازل، بادئات وبويات واجهات جوتن وسايبس",
-    image: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "construction-supplies",
-    name: "لوازم معمار وحدايد",
-    iconName: "Hammer",
-    description: "مسامير، فيشر، زوايا، كالونات، مفصلات ومستلزمات نجارة ومحارة",
-    image: "https://images.unsplash.com/photo-1586864387967-d02ef85d93e8?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "pneumatic-air",
-    name: "معدات ومستلزمات الهواء",
-    iconName: "Wind",
-    description: "كمبروسرات، خراطيم بولي يوريثين، بساتم وبلوف ومسدسات رش",
-    image: "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?auto=format&fit=crop&w=600&q=80"
-  },
-  {
-    id: "accessories-safety",
-    name: "إكسسوارات ومهمات أمان",
-    iconName: "ShieldCheck",
-    description: "خوذ، نظارات حماية، قفازات، أقراص صواريخ ورولات ودهانات",
-    image: "https://images.unsplash.com/photo-1578885136359-16c8bd4d3a8e?auto=format&fit=crop&w=600&q=80"
-  }
+export const LEGACY_DEMO_BANNER_IDS = ['banner-1', 'banner-2', 'banner-3'];
+
+export const INITIAL_CATEGORIES: Category[] = [];
+
+export const LEGACY_DEMO_CATEGORY_IDS = [
+  'power-tools',
+  'hand-tools',
+  'computer-paints',
+  'paints-coatings',
+  'construction-supplies',
+  'pneumatic-air',
+  'accessories-safety'
 ];
 
 export const INITIAL_BRANDS: StoreBrand[] = [

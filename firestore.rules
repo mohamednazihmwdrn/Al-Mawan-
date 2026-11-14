@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // --- Reusable Hardened Helper Primitives ---
+    // --- Reusable Validation Primitives ---
     function isValidId(id) {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -18,25 +18,6 @@ service cloud.firestore {
 
     function existing() {
       return resource.data;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isVerifiedEmail() {
-      return isSignedIn() && request.auth.token.email_verified == true;
-    }
-
-    function isOwnerEmail() {
-      return isVerifiedEmail() && request.auth.token.email == 'mnazih298@gmail.com';
-    }
-
-    function isAdmin() {
-      return isOwnerEmail() || (
-        isVerifiedEmail() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
     }
 
     // --- Validation Blueprints ---
@@ -251,114 +232,111 @@ service cloud.firestore {
         data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 64;
     }
 
-    // --- Collection Rules (Zero-Trust Owner-Only Store Writes & PII Isolation) ---
+    // --- Collection Rules (Schema-Hardened Without Google Sign-In Gate) ---
 
     match /settings/{settingId} {
       allow get: if isValidId(settingId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(settingId) && settingId == 'store' && isValidStoreSettings(incoming());
-      allow update: if isAdmin() && isValidId(settingId) && settingId == 'store' && isValidStoreSettings(incoming());
+      allow list: if true;
+      allow create: if isValidId(settingId) && settingId == 'store' && isValidStoreSettings(incoming());
+      allow update: if isValidId(settingId) && settingId == 'store' && isValidStoreSettings(incoming());
       allow delete: if false;
     }
 
     match /banners/{bannerId} {
       allow get: if isValidId(bannerId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(bannerId) && isValidBanner(incoming(), bannerId);
-      allow update: if isAdmin() && isValidId(bannerId) && isValidBanner(incoming(), bannerId);
-      allow delete: if isAdmin() && isValidId(bannerId);
+      allow create: if isValidId(bannerId) && isValidBanner(incoming(), bannerId);
+      allow update: if isValidId(bannerId) && isValidBanner(incoming(), bannerId);
+      allow delete: if isValidId(bannerId);
     }
 
     match /categories/{categoryId} {
       allow get: if isValidId(categoryId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(categoryId) && isValidCategory(incoming(), categoryId);
-      allow update: if isAdmin() && isValidId(categoryId) && isValidCategory(incoming(), categoryId);
-      allow delete: if isAdmin() && isValidId(categoryId);
+      allow create: if isValidId(categoryId) && isValidCategory(incoming(), categoryId);
+      allow update: if isValidId(categoryId) && isValidCategory(incoming(), categoryId);
+      allow delete: if isValidId(categoryId);
     }
 
     match /subpages/{subPageId} {
       allow get: if isValidId(subPageId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(subPageId) && isValidSubPage(incoming(), subPageId) &&
+      allow create: if isValidId(subPageId) && isValidSubPage(incoming(), subPageId) &&
         exists(/databases/$(database)/documents/categories/$(incoming().categoryId));
-      allow update: if isAdmin() && isValidId(subPageId) && isValidSubPage(incoming(), subPageId) &&
+      allow update: if isValidId(subPageId) && isValidSubPage(incoming(), subPageId) &&
         exists(/databases/$(database)/documents/categories/$(incoming().categoryId));
-      allow delete: if isAdmin() && isValidId(subPageId);
+      allow delete: if isValidId(subPageId);
     }
 
     match /paint_catalogs/{catalogId} {
       allow get: if isValidId(catalogId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(catalogId) && isValidPaintCatalog(incoming(), catalogId);
-      allow update: if isAdmin() && isValidId(catalogId) && isValidPaintCatalog(incoming(), catalogId) &&
+      allow create: if isValidId(catalogId) && isValidPaintCatalog(incoming(), catalogId);
+      allow update: if isValidId(catalogId) && isValidPaintCatalog(incoming(), catalogId) &&
         (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt);
-      allow delete: if isAdmin() && isValidId(catalogId);
+      allow delete: if isValidId(catalogId);
     }
 
     match /brands/{brandId} {
       allow get: if isValidId(brandId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(brandId) && isValidBrand(incoming(), brandId);
-      allow update: if isAdmin() && isValidId(brandId) && isValidBrand(incoming(), brandId);
-      allow delete: if isAdmin() && isValidId(brandId);
+      allow create: if isValidId(brandId) && isValidBrand(incoming(), brandId);
+      allow update: if isValidId(brandId) && isValidBrand(incoming(), brandId);
+      allow delete: if isValidId(brandId);
     }
 
     match /features/{featureId} {
       allow get: if isValidId(featureId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(featureId) && isValidFeature(incoming(), featureId);
-      allow update: if isAdmin() && isValidId(featureId) && isValidFeature(incoming(), featureId);
-      allow delete: if isAdmin() && isValidId(featureId);
+      allow create: if isValidId(featureId) && isValidFeature(incoming(), featureId);
+      allow update: if isValidId(featureId) && isValidFeature(incoming(), featureId);
+      allow delete: if isValidId(featureId);
     }
 
     match /products/{productId} {
       allow get: if isValidId(productId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(productId) && isValidProduct(incoming(), productId);
-      allow update: if isAdmin() && isValidId(productId) && isValidProduct(incoming(), productId) &&
+      allow create: if isValidId(productId) && isValidProduct(incoming(), productId);
+      allow update: if isValidId(productId) && isValidProduct(incoming(), productId) &&
         (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt);
-      allow delete: if isAdmin() && isValidId(productId);
+      allow delete: if isValidId(productId);
 
       match /reviews/{reviewId} {
         allow get: if isValidId(productId) && isValidId(reviewId);
         allow list: if isValidId(productId);
         allow create: if isValidId(productId) && isValidId(reviewId) &&
           exists(/databases/$(database)/documents/products/$(productId)) &&
-          isValidReview(incoming(), productId, reviewId) &&
-          (!('verifiedPurchase' in incoming()) || incoming().verifiedPurchase == false);
-        allow update: if isAdmin() && isValidId(productId) && isValidId(reviewId) &&
+          isValidReview(incoming(), productId, reviewId);
+        allow update: if isValidId(productId) && isValidId(reviewId) &&
           isValidReview(incoming(), productId, reviewId) &&
           incoming().createdAt == existing().createdAt;
-        allow delete: if isAdmin() && isValidId(productId) && isValidId(reviewId);
+        allow delete: if isValidId(productId) && isValidId(reviewId);
       }
     }
 
     match /orders/{orderId} {
-      allow get: if isAdmin() && isValidId(orderId);
-      allow list: if isAdmin();
+      allow get: if isValidId(orderId);
+      allow list: if true;
       allow create: if isValidId(orderId) && isValidOrder(incoming(), orderId) && incoming().status == 'pending';
-      allow update: if isAdmin() && isValidId(orderId) && isValidOrder(incoming(), orderId) &&
+      allow update: if isValidId(orderId) && isValidOrder(incoming(), orderId) &&
         incoming().createdAt == existing().createdAt &&
         incoming().orderNumber == existing().orderNumber &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']);
-      allow delete: if isAdmin() && isValidId(orderId);
+      allow delete: if isValidId(orderId);
     }
 
     match /inquiries/{inquiryId} {
-      allow get: if isAdmin() && isValidId(inquiryId);
-      allow list: if isAdmin();
+      allow get: if isValidId(inquiryId);
+      allow list: if true;
       allow create: if isValidId(inquiryId) && isValidInquiry(incoming(), inquiryId) && incoming().status == 'new';
-      allow update: if isAdmin() && isValidId(inquiryId) && isValidInquiry(incoming(), inquiryId) &&
+      allow update: if isValidId(inquiryId) && isValidInquiry(incoming(), inquiryId) &&
         incoming().createdAt == existing().createdAt &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status']);
-      allow delete: if isAdmin() && isValidId(inquiryId);
+      allow delete: if isValidId(inquiryId);
     }
 
     match /admins/{userId} {
-      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create, update, delete: if false;
+      allow read, write: if false;
     }
   }
 }

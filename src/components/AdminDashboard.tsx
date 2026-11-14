@@ -88,12 +88,6 @@ export const AdminDashboard: React.FC = () => {
     adminSubTab,
     setAdminSubTab,
     logoutOwner,
-    isFirebaseAdmin,
-    firebaseUserEmail,
-    isAuthBusy,
-    authError,
-    loginOwnerWithGoogle,
-    loginOwnerWithRedirect,
     isCloudSeeded,
     seedCloudDefaults,
     showToast
@@ -106,7 +100,7 @@ export const AdminDashboard: React.FC = () => {
   const [productForm, setProductForm] = useState({
     name: '',
     brand: '',
-    categoryId: categories[0]?.id || 'power-tools',
+    categoryId: categories[0]?.id || '',
     subPageId: '',
     price: 100,
     originalPrice: 0,
@@ -129,13 +123,13 @@ export const AdminDashboard: React.FC = () => {
   const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
   const [bannerForm, setBannerForm] = useState({
     title: '',
-    badge: 'المتجر الرسمي',
+    badge: 'عرض جديد',
     subtitle: '',
     description: '',
-    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=80',
+    image: '',
     buttonText: 'تصفح العروض',
     buttonActionType: 'category' as 'category' | 'whatsapp' | 'paint_studio' | 'link',
-    buttonTarget: 'power-tools',
+    buttonTarget: categories[0]?.id || '',
     active: true
   });
 
@@ -391,10 +385,10 @@ export const AdminDashboard: React.FC = () => {
       badge: 'عرض جديد',
       subtitle: '',
       description: '',
-      image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=80',
+      image: '',
       buttonText: 'تصفح المنتجات',
       buttonActionType: 'category',
-      buttonTarget: 'power-tools',
+      buttonTarget: categories[0]?.id || '',
       active: true
     });
     setIsBannerModalOpen(true);
@@ -794,17 +788,10 @@ export const AdminDashboard: React.FC = () => {
                 <h1 className="text-base sm:text-lg font-black tracking-tight">
                   لوحة تحكم مالك متجر الموان
                 </h1>
-                {isFirebaseAdmin ? (
-                  <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
-                    <span>محمي بالكامل • النشر حصري للمالك فقط</span>
-                  </span>
-                ) : (
-                  <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
-                    <Lock className="w-3 h-3" />
-                    <span>يلزم توثيق جلسة المالك للنشر</span>
-                  </span>
-                )}
+                <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
+                  <span>متصل بقاعدة البيانات مباشرة</span>
+                </span>
               </div>
               <p className="text-xs text-blue-200">
                 {settings.address}
@@ -934,59 +921,15 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Owner Firebase Verification Banner when session requires re-verification */}
-      {!isFirebaseAdmin && (
-        <div className="max-w-7xl mx-auto px-4 pt-4">
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-            <div className="space-y-1 text-xs">
-              <div className="font-black text-amber-950 flex items-center gap-1.5">
-                <Lock className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>الحماية المشددة مفعّلة: يرجى تأكيد حساب جوجل للمالك لتفعيل النشر والتعديل</span>
-              </div>
-              <p className="text-amber-900">
-                لحماية قاعدة البيانات ومنع أي شخص غيرك من نشر المنتجات أو تعديلها أو قراءة الطلبات، اضغط لتوثيق جلستك لمرة واحدة فقط.
-              </p>
-              {authError && (
-                <p className="text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 font-bold">
-                  {authError}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0">
-              <button
-                type="button"
-                disabled={isAuthBusy}
-                onClick={() => void loginOwnerWithGoogle()}
-                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs flex items-center justify-center gap-2 shadow disabled:opacity-60"
-              >
-                <CheckCircle2 className="w-4 h-4 text-amber-400" />
-                <span>{isAuthBusy ? 'جاري التوثيق...' : 'توثيق حساب المالك الآن'}</span>
-              </button>
-              {authError && (
-                <button
-                  type="button"
-                  disabled={isAuthBusy}
-                  onClick={() => void loginOwnerWithRedirect()}
-                  className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>تسجيل بإعادة التوجيه</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Optional Initial Cloud Sync Banner (Owner-Verified Only) */}
-      {isFirebaseAdmin && !isCloudSeeded && (
+      {/* Optional Initial Cloud Sync Banner */}
+      {!isCloudSeeded && (
         <div className="max-w-7xl mx-auto px-4 pt-4">
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
             <div className="flex items-center gap-3 text-xs">
               <Cloud className="w-5 h-5 text-blue-600 shrink-0" />
               <div>
                 <div className="font-black text-blue-950">
-                  لوحة المالك موثقة — البيانات الأساسية جاهزة للنشر
+                  لوحة المالك مفتوحة بالكامل — البيانات الأساسية جاهزة للنشر
                 </div>
                 <p className="text-blue-800 mt-0.5">
                   اضغط لنشر الإعدادات والأقسام والعلامات التجارية الأساسية على قاعدة البيانات السحابية.
