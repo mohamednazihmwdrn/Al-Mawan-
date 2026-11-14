@@ -15,16 +15,12 @@ import {
   Unsubscribe
 } from 'firebase/firestore';
 import {
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-  User
-} from 'firebase/auth';
-import {
   Product,
   ProductReview,
   ContactInquiry,
   Category,
+  SubPage,
+  PaintCatalog,
   CartItem,
   Order,
   StoreSettings,
@@ -39,13 +35,11 @@ import {
   INITIAL_BANNERS,
   INITIAL_BRANDS,
   INITIAL_FEATURES,
-  LEGACY_DEMO_PRODUCT_IDS
+  LEGACY_DEMO_PRODUCT_IDS,
+  LEGACY_TEXT_BRAND_IDS
 } from '../data/initialData';
 import {
   db,
-  auth,
-  googleProvider,
-  OWNER_ADMIN_EMAIL,
   OperationType,
   handleFirestoreError
 } from '../firebase';
@@ -57,6 +51,7 @@ export type AdminSubTab =
   | 'orders'
   | 'inquiries'
   | 'categories'
+  | 'paint_catalogs'
   | 'banners'
   | 'site_content'
   | 'settings';
@@ -71,7 +66,7 @@ interface StoreContextType {
   openProductDetails: (product: Product) => void;
   closeProductDetails: () => void;
 
-  // Secret Owner Auth & Cloud Admin Auth
+  // Secret Owner Auth & Cloud Seed
   isOwnerAuthenticated: boolean;
   verifyOwnerPassword: (password: string) => Promise<boolean>;
   logoutOwner: () => Promise<void>;
@@ -80,11 +75,7 @@ interface StoreContextType {
   triggerSecretClick: () => void;
   secretClicks: number;
 
-  firebaseUser: User | null;
-  authReady: boolean;
-  isCloudAdmin: boolean;
   isCloudSeeded: boolean;
-  signInCloudAdmin: () => Promise<boolean>;
   seedCloudDefaults: (force?: boolean) => Promise<void>;
 
   // Settings
@@ -120,11 +111,22 @@ interface StoreContextType {
   ) => Promise<void>;
   deleteProductReview: (productId: string, reviewId: string) => Promise<void>;
 
-  // Categories
+  // Categories & SubPages
   categories: Category[];
   addCategory: (category: Omit<Category, 'id'>) => Promise<void>;
   updateCategory: (id: string, category: Partial<Category>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
+
+  subPages: SubPage[];
+  addSubPage: (subPage: Omit<SubPage, 'id'>) => Promise<void>;
+  updateSubPage: (id: string, subPage: Partial<SubPage>) => Promise<void>;
+  deleteSubPage: (id: string) => Promise<void>;
+
+  // Paint Color Catalogs (PDF & Images)
+  paintCatalogs: PaintCatalog[];
+  addPaintCatalog: (catalog: Omit<PaintCatalog, 'id' | 'createdAt'>) => Promise<void>;
+  updatePaintCatalog: (id: string, catalog: Partial<PaintCatalog>) => Promise<void>;
+  deletePaintCatalog: (id: string) => Promise<void>;
 
   // Brands
   brands: StoreBrand[];
@@ -141,6 +143,8 @@ interface StoreContextType {
   // Navigation & Search
   selectedCategoryId: string | null;
   setSelectedCategoryId: (id: string | null) => void;
+  selectedSubPageId: string | null;
+  setSelectedSubPageId: (id: string | null) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   selectedFilter: 'all' | 'deals' | 'new' | 'bestsellers';
@@ -287,6 +291,36 @@ function buildBrandPayload(b: StoreBrand, index = 0): Record<string, unknown> {
   return payload;
 }
 
+function buildSubPagePayload(sp: SubPage, index = 0): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    id: sanitizeId(sp.id),
+    categoryId: sanitizeId(sp.categoryId),
+    name: String(sp.name).trim().slice(0, 100),
+    sortOrder: typeof sp.sortOrder === 'number' ? sp.sortOrder : index
+  };
+  if (sp.description && sp.description.trim()) {
+    payload.description = String(sp.description).trim().slice(0, 500);
+  }
+  if (sp.image && sp.image.trim()) {
+    payload.image = String(sp.image).trim().slice(0, 150000);
+  }
+  return payload;
+}
+
+function buildPaintCatalogPayload(c: PaintCatalog): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    id: sanitizeId(c.id),
+    title: String(c.title).trim().slice(0, 150),
+    fileType: c.fileType === 'pdf' ? 'pdf' : 'image',
+    fileUrl: String(c.fileUrl).trim().slice(0, 950000),
+    createdAt: typeof c.createdAt === 'number' ? c.createdAt : Date.now()
+  };
+  if (c.brand && c.brand.trim()) payload.brand = String(c.brand).trim().slice(0, 80);
+  if (c.fileName && c.fileName.trim()) payload.fileName = String(c.fileName).trim().slice(0, 150);
+  if (c.description && c.description.trim()) payload.description = String(c.description).trim().slice(0, 500);
+  return payload;
+}
+
 function buildFeaturePayload(f: StoreFeature, index = 0): Record<string, unknown> {
   return {
     id: sanitizeId(f.id),
@@ -320,6 +354,12 @@ function buildProductPayload(p: Product): Record<string, unknown> {
     updatedAt: Date.now()
   };
 
+  if (p.subPageId && p.subPageId.trim()) {
+    payload.subPageId = sanitizeId(p.subPageId);
+  }
+  if (p.subPageName && p.subPageName.trim()) {
+    payload.subPageName = String(p.subPageName).trim().slice(0, 120);
+  }
   if (typeof p.originalPrice === 'number' && p.originalPrice >= 0) {
     payload.originalPrice = Math.min(10000000, p.originalPrice);
   }
@@ -377,13 +417,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   });
 
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const isCloudAdmin = Boolean(
-    firebaseUser?.emailVerified &&
-      firebaseUser.email?.toLowerCase() === OWNER_ADMIN_EMAIL.toLowerCase()
-  );
-
   const [isSecretModalOpen, setIsSecretModalOpen] = useState(false);
   const [secretClicks, setSecretClicks] = useState(0);
   const secretClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -392,6 +425,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [settings, setSettings] = useState<StoreSettings>(INITIAL_SETTINGS);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
+  const [subPages, setSubPages] = useState<SubPage[]>([]);
+  const [paintCatalogs, setPaintCatalogs] = useState<PaintCatalog[]>([]);
   const [banners, setBanners] = useState<BannerSlide[]>(INITIAL_BANNERS);
   const [brands, setBrands] = useState<StoreBrand[]>(INITIAL_BRANDS);
   const [features, setFeatures] = useState<StoreFeature[]>(INITIAL_FEATURES);
@@ -405,6 +440,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const autoSeedAttemptedRef = useRef<boolean>(false);
   const demoCleanupAttemptedRef = useRef<boolean>(false);
+  const brandsMigrationAttemptedRef = useRef<boolean>(false);
+  const ilockLabelFixedRef = useRef<boolean>(false);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -417,7 +454,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   // UI state
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCategoryId, _setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedSubPageId, setSelectedSubPageId] = useState<string | null>(null);
+  const setSelectedCategoryId = useCallback((id: string | null) => {
+    _setSelectedCategoryId(id);
+    setSelectedSubPageId(null);
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'deals' | 'new' | 'bestsellers'>('all');
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -495,23 +537,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 3400);
   }, []);
 
-  // Auth listener
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      setAuthReady(true);
-    });
-    return () => unsub();
-  }, []);
-
   // Seed default store structure (settings, banners, categories, brands, features — NO dummy products)
   const seedCloudDefaults = useCallback(
     async (force = false) => {
-      if (!isCloudAdmin) {
-        showToast('يرجى تسجيل الدخول بحساب المالك السحابي (Google) أولاً.');
-        return;
-      }
-
       setIsSyncing(true);
       try {
         if (!force) {
@@ -538,7 +566,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           batch.set(doc(db, 'categories', sanitizeId(c.id)), buildCategoryPayload(c));
         });
 
-        // Partner Brands
+        // Partner Brands (13 Logo Brands)
         INITIAL_BRANDS.forEach((br, idx) => {
           batch.set(doc(db, 'brands', sanitizeId(br.id)), buildBrandPayload(br, idx));
         });
@@ -551,29 +579,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         await batch.commit();
         setIsCloudSeeded(true);
         setLastSyncedTime(Date.now());
-        showToast('تمت مزامنة إعدادات وأقسام المتجر على السحابة بنجاح!');
+        if (force) {
+          showToast('تمت مزامنة إعدادات وأقسام المتجر على السحابة بنجاح!');
+        }
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, 'batch-seed');
+        console.warn('Cloud seed notice:', err);
       } finally {
         setIsSyncing(false);
       }
     },
-    [isCloudAdmin, showToast]
+    [showToast]
   );
 
-  // Auto-seed store settings & sections once when Cloud Admin signs in and store config is missing
+  // Auto-seed store settings & sections once if settings/store is missing
   useEffect(() => {
-    if (authReady && isCloudAdmin && !autoSeedAttemptedRef.current) {
+    if (!autoSeedAttemptedRef.current) {
       autoSeedAttemptedRef.current = true;
-      seedCloudDefaults(false).catch((err) => {
-        console.warn('Auto-seed skipped or failed:', err);
-      });
+      seedCloudDefaults(false).catch(() => {});
     }
-  }, [authReady, isCloudAdmin, seedCloudDefaults]);
+  }, [seedCloudDefaults]);
 
-  // One-time automatic cleanup of legacy demo products (prod-1..prod-14) in live Firestore
+  // One-time automatic cleanup of legacy demo products (prod-1..prod-14)
   useEffect(() => {
-    if (!authReady || !isCloudAdmin || demoCleanupAttemptedRef.current) return;
+    if (demoCleanupAttemptedRef.current) return;
     if (typeof window !== 'undefined' && localStorage.getItem('almawan_demo_cleaned_v1') === '1') {
       demoCleanupAttemptedRef.current = true;
       return;
@@ -604,15 +632,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } catch {
           // ignore
         }
-        showToast('تم تنظيف المنتجات التجريبية القديمة تلقائياً — يمكنك الآن إضافة منتجاتك الحقيقية.');
       } catch (err) {
         console.warn('Legacy demo cleanup notice:', err);
       }
     };
     cleanLegacy();
-  }, [authReady, isCloudAdmin, products, showToast]);
+  }, [products]);
 
-  // --- Real-Time Firestore Listeners (Public Catalog) ---
+  // --- Real-Time Firestore Listeners ---
 
   // 1. Settings listener
   useEffect(() => {
@@ -679,7 +706,51 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => unsub();
   }, []);
 
-  // 3B. Partner Brands listener
+  // 3A-sub. SubPages listener
+  useEffect(() => {
+    const q = query(collection(db, 'subpages'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (!snap.empty) {
+          const loaded = snap.docs
+            .map((d) => ({ ...(d.data() as SubPage), id: d.id }))
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          setSubPages(loaded);
+          setLastSyncedTime(Date.now());
+        } else {
+          setSubPages([]);
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'subpages');
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // 3A-paint. Paint Color Catalogs listener (PDFs & Images)
+  useEffect(() => {
+    const q = query(collection(db, 'paint_catalogs'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (!snap.empty) {
+          const loaded = snap.docs.map((d) => ({ ...(d.data() as PaintCatalog), id: d.id }));
+          setPaintCatalogs(loaded);
+          setLastSyncedTime(Date.now());
+        } else {
+          setPaintCatalogs([]);
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.LIST, 'paint_catalogs');
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // 3B. Partner Brands listener + One-time upgrade from legacy text-only brands to the 13 logo brands
   useEffect(() => {
     const q = query(collection(db, 'brands'));
     const unsub = onSnapshot(
@@ -689,10 +760,66 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const loaded = snap.docs
             .map((d) => ({ ...(d.data() as StoreBrand), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-          setBrands(loaded);
+
+          const onlyLegacyTextBrands =
+            loaded.length > 0 &&
+            loaded.every((b) => LEGACY_TEXT_BRAND_IDS.includes(b.id) && !b.logoUrl);
+
+          if (
+            onlyLegacyTextBrands &&
+            !brandsMigrationAttemptedRef.current &&
+            localStorage.getItem('almawan_brands_migrated_v2') !== '1'
+          ) {
+            brandsMigrationAttemptedRef.current = true;
+            const migrateBrands = async () => {
+              try {
+                const batch = writeBatch(db);
+                loaded.forEach((b) => batch.delete(doc(db, 'brands', b.id)));
+                INITIAL_BRANDS.forEach((br, idx) => {
+                  batch.set(doc(db, 'brands', sanitizeId(br.id)), buildBrandPayload(br, idx));
+                });
+                await batch.commit();
+                localStorage.setItem('almawan_brands_migrated_v2', '1');
+              } catch (err) {
+                console.warn('Brand logo migration notice:', err);
+              }
+            };
+            migrateBrands();
+            setBrands(INITIAL_BRANDS);
+          } else {
+            const ilockDoc = loaded.find((b) => b.id === 'brand-ilock');
+            if (ilockDoc && (ilockDoc.label.includes('أقفال') || ilockDoc.label.includes('كوالين'))) {
+              const corrected = loaded.map((b) =>
+                b.id === 'brand-ilock' ? { ...b, label: 'آي لوك لأدوات الكهرباء' } : b
+              );
+              setBrands(corrected);
+              if (!ilockLabelFixedRef.current) {
+                ilockLabelFixedRef.current = true;
+                updateDoc(doc(db, 'brands', 'brand-ilock'), {
+                  label: 'آي لوك لأدوات الكهرباء'
+                }).catch(() => {});
+              }
+            } else {
+              setBrands(loaded);
+            }
+          }
           setLastSyncedTime(Date.now());
         } else {
           setBrands(INITIAL_BRANDS);
+          if (!brandsMigrationAttemptedRef.current && localStorage.getItem('almawan_brands_migrated_v2') !== '1') {
+            brandsMigrationAttemptedRef.current = true;
+            const batch = writeBatch(db);
+            INITIAL_BRANDS.forEach((br, idx) => {
+              batch.set(doc(db, 'brands', sanitizeId(br.id)), buildBrandPayload(br, idx));
+            });
+            batch.commit().then(() => {
+              try {
+                localStorage.setItem('almawan_brands_migrated_v2', '1');
+              } catch {
+                // ignore
+              }
+            }).catch(() => {});
+          }
         }
       },
       (err) => {
@@ -725,7 +852,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => unsub();
   }, []);
 
-  // 4. Products listener (Scalable paginated query — empty by default until owner adds products)
+  // 4. Products listener
   useEffect(() => {
     const q = query(
       collection(db, 'products'),
@@ -755,11 +882,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProductLimit((prev) => prev + PRODUCT_PAGE_SIZE);
   };
 
-  // --- Real-Time Firestore Listeners (PII Collections - Admin ONLY) ---
+  // --- Owner-Session Listeners for Orders & Inquiries (no Google login required) ---
 
-  // 5. Orders listener (strictly guarded by isCloudAdmin)
+  // 5. Orders listener
   useEffect(() => {
-    if (!authReady || !isCloudAdmin) {
+    if (!isOwnerAuthenticated) {
       setOrders([]);
       return;
     }
@@ -776,11 +903,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     );
     return () => unsub();
-  }, [authReady, isCloudAdmin]);
+  }, [isOwnerAuthenticated]);
 
-  // 6. Inquiries listener (strictly guarded by isCloudAdmin)
+  // 6. Inquiries listener
   useEffect(() => {
-    if (!authReady || !isCloudAdmin) {
+    if (!isOwnerAuthenticated) {
       setInquiries([]);
       return;
     }
@@ -797,7 +924,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     );
     return () => unsub();
-  }, [authReady, isCloudAdmin]);
+  }, [isOwnerAuthenticated]);
 
   // --- Secret 10-Click Trigger & Owner Auth ---
 
@@ -829,53 +956,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return false;
   };
 
-  const signInCloudAdmin = async (): Promise<boolean> => {
-    try {
-      const res = await signInWithPopup(auth, googleProvider);
-      const user = res.user;
-      if (user.email?.toLowerCase() !== OWNER_ADMIN_EMAIL.toLowerCase() || !user.emailVerified) {
-        await signOut(auth);
-        showToast('هذا الحساب غير مصرح له بإدارة المتجر. يرجى الدخول بحساب المالك المعتمد.');
-        return false;
-      }
-      setIsOwnerAuthenticated(true);
-      sessionStorage.setItem(AUTH_KEY, 'true');
-      setActiveView('admin');
-      setIsSecretModalOpen(false);
-      showToast('تم تفعيل المزامنة السحابية الحية للمالك بنجاح!');
-      return true;
-    } catch (err) {
-      console.error('Google Sign-In error:', err);
-      showToast('تعذر إكمال تسجيل الدخول بجوجل، حاول مرة أخرى.');
-      return false;
-    }
-  };
-
   const logoutOwner = async () => {
     setIsOwnerAuthenticated(false);
     sessionStorage.removeItem(AUTH_KEY);
     setActiveView('storefront');
-    try {
-      if (auth.currentUser) {
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.warn('Sign out notice:', err);
-    }
     showToast('تم تسجيل الخروج وقفل لوحة التحكم للمالك.');
   };
 
-  const ensureCloudAdminOrThrow = () => {
-    if (!isCloudAdmin) {
-      showToast('لحفظ ونشر التعديلات سحابياً لجميع العملاء في مصر، يرجى تأكيد حساب المالك بجوجل من أعلى اللوحة.');
-      throw new Error('CLOUD_ADMIN_AUTH_REQUIRED');
+  const ensureOwnerSessionOrThrow = () => {
+    if (!isOwnerAuthenticated) {
+      showToast('يرجى فتح لوحة التحكم برمز المالك أولاً.');
+      throw new Error('OWNER_AUTH_REQUIRED');
     }
   };
 
   // --- Banner CRUD ---
 
   const addBanner = async (bannerData: Omit<BannerSlide, 'id'>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const id = sanitizeId(`banner-${Date.now()}`);
     const newBanner: BannerSlide = { ...bannerData, id, sortOrder: banners.length };
@@ -891,7 +989,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateBanner = async (id: string, updated: Partial<BannerSlide>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const current = banners.find((b) => b.id === id);
     if (!current) {
@@ -911,7 +1009,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteBanner = async (id: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'banners', id));
@@ -933,7 +1031,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // --- Product CRUD ---
 
   const addProduct = async (productData: Omit<Product, 'id'>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const id = sanitizeId(`prod-${Date.now()}`);
     const now = Date.now();
@@ -956,7 +1054,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateProduct = async (id: string, updated: Partial<Product>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const current = products.find((p) => p.id === id);
     if (!current) {
@@ -976,7 +1074,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteProduct = async (id: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'products', id));
@@ -990,7 +1088,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const clearAllProducts = async () => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     try {
       const snap = await getDocs(collection(db, 'products'));
@@ -1073,7 +1171,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteProductReview = async (productId: string, reviewId: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     const safeProdId = sanitizeId(productId);
     const safeRevId = sanitizeId(reviewId);
     const path = `products/${safeProdId}/reviews/${safeRevId}`;
@@ -1088,7 +1186,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // --- Category CRUD ---
 
   const addCategory = async (catData: Omit<Category, 'id'>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const id = sanitizeId(`cat-${Date.now()}`);
     const newCat: Category = { ...catData, id };
@@ -1104,7 +1202,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateCategory = async (id: string, updated: Partial<Category>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const current = categories.find((c) => c.id === id);
     if (!current) {
@@ -1124,14 +1222,132 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteCategory = async (id: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'categories', id));
+      const childSubPages = subPages.filter((sp) => sp.categoryId === id);
+      if (childSubPages.length > 0) {
+        const batch = writeBatch(db);
+        childSubPages.forEach((sp) => batch.delete(doc(db, 'subpages', sp.id)));
+        await batch.commit();
+      }
       setLastSyncedTime(Date.now());
-      showToast('تم حذف القسم');
+      showToast('تم حذف القسم وصفحاته الفرعية');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `categories/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // --- SubPages CRUD ---
+
+  const addSubPage = async (spData: Omit<SubPage, 'id'>) => {
+    ensureOwnerSessionOrThrow();
+    setIsSyncing(true);
+    const id = sanitizeId(`sub-${Date.now()}-${Math.floor(Math.random() * 100)}`);
+    const catCount = subPages.filter((sp) => sp.categoryId === spData.categoryId).length;
+    const newSp: SubPage = { ...spData, id, sortOrder: spData.sortOrder ?? catCount };
+    try {
+      await setDoc(doc(db, 'subpages', id), buildSubPagePayload(newSp, catCount));
+      setLastSyncedTime(Date.now());
+      showToast('تم إضافة الصفحة الفرعية داخل القسم بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `subpages/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const updateSubPage = async (id: string, updated: Partial<SubPage>) => {
+    ensureOwnerSessionOrThrow();
+    setIsSyncing(true);
+    const current = subPages.find((sp) => sp.id === id);
+    if (!current) {
+      setIsSyncing(false);
+      return;
+    }
+    const merged: SubPage = { ...current, ...updated, id };
+    try {
+      await setDoc(doc(db, 'subpages', id), buildSubPagePayload(merged));
+      setLastSyncedTime(Date.now());
+      showToast('تم تحديث الصفحة الفرعية بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `subpages/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const deleteSubPage = async (id: string) => {
+    ensureOwnerSessionOrThrow();
+    setIsSyncing(true);
+    try {
+      await deleteDoc(doc(db, 'subpages', id));
+      if (selectedSubPageId === id) {
+        setSelectedSubPageId(null);
+      }
+      setLastSyncedTime(Date.now());
+      showToast('تم حذف الصفحة الفرعية');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `subpages/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // --- Paint Color Catalogs CRUD (PDFs & Images) ---
+
+  const addPaintCatalog = async (catData: Omit<PaintCatalog, 'id' | 'createdAt'>) => {
+    ensureOwnerSessionOrThrow();
+    setIsSyncing(true);
+    const id = sanitizeId(`pcat-${Date.now()}-${Math.floor(Math.random() * 100)}`);
+    const newCatalog: PaintCatalog = {
+      ...catData,
+      id,
+      createdAt: Date.now()
+    };
+    try {
+      await setDoc(doc(db, 'paint_catalogs', id), buildPaintCatalogPayload(newCatalog));
+      setLastSyncedTime(Date.now());
+      showToast('تم رفع وإضافة كتالوج الألوان بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `paint_catalogs/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const updatePaintCatalog = async (id: string, updated: Partial<PaintCatalog>) => {
+    ensureOwnerSessionOrThrow();
+    setIsSyncing(true);
+    const current = paintCatalogs.find((c) => c.id === id);
+    if (!current) {
+      setIsSyncing(false);
+      return;
+    }
+    const merged: PaintCatalog = { ...current, ...updated, id };
+    try {
+      await setDoc(doc(db, 'paint_catalogs', id), buildPaintCatalogPayload(merged));
+      setLastSyncedTime(Date.now());
+      showToast('تم تحديث كتالوج الألوان بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `paint_catalogs/${id}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const deletePaintCatalog = async (id: string) => {
+    ensureOwnerSessionOrThrow();
+    setIsSyncing(true);
+    try {
+      await deleteDoc(doc(db, 'paint_catalogs', id));
+      setLastSyncedTime(Date.now());
+      showToast('تم حذف كتالوج الألوان');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `paint_catalogs/${id}`);
     } finally {
       setIsSyncing(false);
     }
@@ -1140,7 +1356,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // --- Brands CRUD ---
 
   const addBrand = async (brandData: Omit<StoreBrand, 'id'>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const id = sanitizeId(`brand-${Date.now()}`);
     const newBrand: StoreBrand = { ...brandData, id, sortOrder: brands.length };
@@ -1156,7 +1372,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateBrand = async (id: string, updated: Partial<StoreBrand>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const current = brands.find((b) => b.id === id);
     if (!current) {
@@ -1176,7 +1392,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteBrand = async (id: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'brands', id));
@@ -1192,7 +1408,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // --- Features (ValueProps) CRUD ---
 
   const addFeature = async (featData: Omit<StoreFeature, 'id'>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const id = sanitizeId(`feat-${Date.now()}`);
     const newFeat: StoreFeature = { ...featData, id, sortOrder: features.length };
@@ -1208,7 +1424,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateFeature = async (id: string, updated: Partial<StoreFeature>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const current = features.find((f) => f.id === id);
     if (!current) {
@@ -1228,7 +1444,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteFeature = async (id: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'features', id));
@@ -1244,7 +1460,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // --- Settings CRUD ---
 
   const updateSettings = async (newSettings: Partial<StoreSettings>) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     setIsSyncing(true);
     const merged: StoreSettings = { ...settings, ...newSettings };
     try {
@@ -1322,7 +1538,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     try {
       await updateDoc(doc(db, 'orders', orderId), { status });
       showToast('تم تحديث حالة الطلب');
@@ -1332,7 +1548,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteOrder = async (orderId: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     try {
       await deleteDoc(doc(db, 'orders', orderId));
       showToast('تم حذف الطلب من السجل');
@@ -1375,7 +1591,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     inquiryId: string,
     status: ContactInquiry['status']
   ) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     try {
       await updateDoc(doc(db, 'inquiries', inquiryId), { status });
       showToast('تم تحديث حالة الاستفسار');
@@ -1385,7 +1601,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteInquiry = async (inquiryId: string) => {
-    ensureCloudAdminOrThrow();
+    ensureOwnerSessionOrThrow();
     try {
       await deleteDoc(doc(db, 'inquiries', inquiryId));
       showToast('تم حذف الاستفسار من السجل');
@@ -1478,11 +1694,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsSecretModalOpen,
         triggerSecretClick,
         secretClicks,
-        firebaseUser,
-        authReady,
-        isCloudAdmin,
         isCloudSeeded,
-        signInCloudAdmin,
         seedCloudDefaults,
         settings,
         updateSettings,
@@ -1507,6 +1719,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addCategory,
         updateCategory,
         deleteCategory,
+        subPages,
+        addSubPage,
+        updateSubPage,
+        deleteSubPage,
+        paintCatalogs,
+        addPaintCatalog,
+        updatePaintCatalog,
+        deletePaintCatalog,
         brands,
         addBrand,
         updateBrand,
@@ -1517,6 +1737,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         deleteFeature,
         selectedCategoryId,
         setSelectedCategoryId,
+        selectedSubPageId,
+        setSelectedSubPageId,
         searchQuery,
         setSearchQuery,
         selectedFilter,

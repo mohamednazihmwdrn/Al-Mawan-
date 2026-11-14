@@ -71,6 +71,34 @@
       },
       "required": ["name", "image"]
     },
+    "SubPage": {
+      "title": "SubPage",
+      "description": "Custom sub-page created by store owner inside a main category",
+      "type": "object",
+      "properties": {
+        "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "image": { "type": "string", "maxLength": 150000 },
+        "sortOrder": { "type": "number" }
+      },
+      "required": ["categoryId", "name"]
+    },
+    "PaintCatalog": {
+      "title": "PaintCatalog",
+      "description": "Owner-attached PDF or image color chart for computer paint mixing studio",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "brand": { "type": "string", "maxLength": 80 },
+        "fileType": { "type": "string", "enum": ["pdf", "image"] },
+        "fileUrl": { "type": "string", "minLength": 5, "maxLength": 950000 },
+        "fileName": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "fileType", "fileUrl", "createdAt"]
+    },
     "StoreBrand": {
       "title": "StoreBrand",
       "description": "Partner hardware or paint brand shown on the storefront",
@@ -106,6 +134,8 @@
         "brand": { "type": "string", "minLength": 1, "maxLength": 100 },
         "categoryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "categoryName": { "type": "string", "maxLength": 120 },
+        "subPageId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "subPageName": { "type": "string", "maxLength": 120 },
         "price": { "type": "number" },
         "originalPrice": { "type": "number" },
         "discountBadge": { "type": "string", "maxLength": 60 },
@@ -205,6 +235,14 @@
     "/categories/{categoryId}": {
       "schema": { "$ref": "#/entities/Category" },
       "description": "Store product categories"
+    },
+    "/subpages/{subPageId}": {
+      "schema": { "$ref": "#/entities/SubPage" },
+      "description": "Custom sub-pages inside categories managed by store owner"
+    },
+    "/paint_catalogs/{catalogId}": {
+      "schema": { "$ref": "#/entities/PaintCatalog" },
+      "description": "Color charts (PDF or images) attached by store owner for computer paint studio"
     },
     "/brands/{brandId}": {
       "schema": { "$ref": "#/entities/StoreBrand" },

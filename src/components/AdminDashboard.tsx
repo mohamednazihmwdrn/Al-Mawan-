@@ -6,6 +6,8 @@ import {
   BannerSlide,
   ContactInquiry,
   Category,
+  SubPage,
+  PaintCatalog,
   StoreBrand,
   StoreFeature
 } from '../types/store';
@@ -15,6 +17,9 @@ import {
   Package,
   ShoppingCart,
   FolderTree,
+  Layers,
+  BookOpen,
+  FileText,
   Settings,
   Plus,
   Edit2,
@@ -31,10 +36,10 @@ import {
   Upload,
   Mail,
   CheckCircle2,
-  AlertCircle,
   Sparkles,
   Award,
-  Eye
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -52,6 +57,14 @@ export const AdminDashboard: React.FC = () => {
     addCategory,
     updateCategory,
     deleteCategory,
+    subPages,
+    addSubPage,
+    updateSubPage,
+    deleteSubPage,
+    paintCatalogs,
+    addPaintCatalog,
+    updatePaintCatalog,
+    deletePaintCatalog,
     banners,
     addBanner,
     updateBanner,
@@ -75,9 +88,7 @@ export const AdminDashboard: React.FC = () => {
     adminSubTab,
     setAdminSubTab,
     logoutOwner,
-    isCloudAdmin,
     isCloudSeeded,
-    signInCloudAdmin,
     seedCloudDefaults,
     showToast
   } = useStore();
@@ -90,6 +101,7 @@ export const AdminDashboard: React.FC = () => {
     name: '',
     brand: '',
     categoryId: categories[0]?.id || 'power-tools',
+    subPageId: '',
     price: 100,
     originalPrice: 0,
     discountBadge: '',
@@ -133,6 +145,33 @@ export const AdminDashboard: React.FC = () => {
   const [newCatDesc, setNewCatDesc] = useState('');
   const [newCatImage, setNewCatImage] = useState('');
 
+  // SubPages manager state (multiple subpages inside each category)
+  const [managingSubPagesCatId, setManagingSubPagesCatId] = useState<string>(categories[0]?.id || '');
+  const [editingSubPageId, setEditingSubPageId] = useState<string | null>(null);
+  const [subPageForm, setSubPageForm] = useState({
+    name: '',
+    description: '',
+    image: ''
+  });
+
+  useEffect(() => {
+    if (categories.length > 0 && (!managingSubPagesCatId || !categories.some((c) => c.id === managingSubPagesCatId))) {
+      setManagingSubPagesCatId(categories[0].id);
+    }
+  }, [categories, managingSubPagesCatId]);
+
+  // Paint Catalogs manager state (PDF & Image color charts)
+  const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
+  const [isUploadingCatalog, setIsUploadingCatalog] = useState(false);
+  const [catalogForm, setCatalogForm] = useState({
+    title: '',
+    brand: '',
+    fileType: 'pdf' as 'pdf' | 'image',
+    fileUrl: '',
+    fileName: '',
+    description: ''
+  });
+
   // Feature (ValueProps) form state
   const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
   const [featureForm, setFeatureForm] = useState({
@@ -163,12 +202,16 @@ export const AdminDashboard: React.FC = () => {
   const inStockCount = products.filter(p => p.inStock).length;
 
   // Handlers for Products
+  const [isCustomBrandMode, setIsCustomBrandMode] = useState(false);
+
   const handleOpenAddProduct = () => {
     setEditingProductId(null);
+    setIsCustomBrandMode(false);
     setProductForm({
       name: '',
-      brand: 'الموان',
+      brand: brands[0]?.name || 'الموان',
       categoryId: categories[0]?.id || 'power-tools',
+      subPageId: '',
       price: 0,
       originalPrice: 0,
       discountBadge: '',
@@ -189,11 +232,15 @@ export const AdminDashboard: React.FC = () => {
 
   const handleOpenEditProduct = (prod: Product) => {
     setEditingProductId(prod.id);
+    const matchedBrand = brands.find((b) => b.name.toLowerCase() === (prod.brand || '').toLowerCase());
+    const isBuiltInStoreBrand = prod.brand === 'الموان';
+    setIsCustomBrandMode(Boolean(prod.brand && !matchedBrand && !isBuiltInStoreBrand));
     const extraImgs = (prod.images || []).filter((img) => img !== prod.image);
     setProductForm({
       name: prod.name,
-      brand: prod.brand,
+      brand: matchedBrand ? matchedBrand.name : prod.brand,
       categoryId: prod.categoryId,
+      subPageId: prod.subPageId || '',
       price: prod.price,
       originalPrice: prod.originalPrice || 0,
       discountBadge: prod.discountBadge || '',
@@ -270,6 +317,9 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
     const cat = categories.find(c => c.id === productForm.categoryId);
+    const sp = productForm.subPageId
+      ? subPages.find((s) => s.id === productForm.subPageId && s.categoryId === productForm.categoryId)
+      : undefined;
     const options = productForm.optionsText
       ? productForm.optionsText.split(',').map(s => s.trim()).filter(Boolean)
       : undefined;
@@ -287,6 +337,8 @@ export const AdminDashboard: React.FC = () => {
       brand: productForm.brand,
       categoryId: productForm.categoryId,
       categoryName: cat?.name || 'عام',
+      subPageId: sp?.id,
+      subPageName: sp?.name,
       price: Number(productForm.price),
       originalPrice: Number(productForm.originalPrice) > 0 ? Number(productForm.originalPrice) : undefined,
       discountBadge: productForm.discountBadge || undefined,
@@ -435,6 +487,192 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  // SubPages Handlers
+  const handleSubPageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingImage(true);
+    try {
+      const compressed = await compressImageFile(file, 600, 90000);
+      setSubPageForm((prev) => ({ ...prev, image: compressed }));
+      showToast('تم تجهيز صورة الصفحة الفرعية بنجاح');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'تعذر معالجة الصورة');
+    } finally {
+      setIsCompressingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleEditSubPageStart = (sp: SubPage) => {
+    setManagingSubPagesCatId(sp.categoryId);
+    setEditingSubPageId(sp.id);
+    setSubPageForm({
+      name: sp.name,
+      description: sp.description || '',
+      image: sp.image || ''
+    });
+  };
+
+  const handleCancelSubPageEdit = () => {
+    setEditingSubPageId(null);
+    setSubPageForm({ name: '', description: '', image: '' });
+  };
+
+  const handleSaveSubPage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!managingSubPagesCatId) {
+      showToast('يرجى اختيار القسم الرئيسي أولاً');
+      return;
+    }
+    if (subPageForm.name.trim().length < 2) {
+      showToast('يرجى كتابة اسم الصفحة الفرعية (حرفين على الأقل)');
+      return;
+    }
+    try {
+      if (editingSubPageId) {
+        await updateSubPage(editingSubPageId, {
+          categoryId: managingSubPagesCatId,
+          name: subPageForm.name.trim(),
+          description: subPageForm.description.trim(),
+          image: subPageForm.image.trim()
+        });
+      } else {
+        const sameCatCount = subPages.filter((s) => s.categoryId === managingSubPagesCatId).length;
+        await addSubPage({
+          categoryId: managingSubPagesCatId,
+          name: subPageForm.name.trim(),
+          description: subPageForm.description.trim(),
+          image: subPageForm.image.trim(),
+          sortOrder: sameCatCount + 1
+        });
+      }
+      handleCancelSubPageEdit();
+    } catch {
+      // handled in StoreContext
+    }
+  };
+
+  // Paint Catalogs Handlers (PDF & Images)
+  const handleCatalogFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCatalog(true);
+    try {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (isPdf) {
+        if (file.size > 680 * 1024) {
+          showToast('حجم ملف PDF أكبر من 680 كيلوبايت للرفع المباشر. يمكنك ضغط الملف أو لصق رابط خارجي (مثل Google Drive) في خانة الرابط.');
+          return;
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === 'string') {
+              resolve(reader.result);
+            } else {
+              reject(new Error('تعذر قراءة ملف PDF'));
+            }
+          };
+          reader.onerror = () => reject(new Error('تعذر قراءة ملف PDF'));
+          reader.readAsDataURL(file);
+        });
+        if (dataUrl.length > 945000) {
+          showToast('حجم ملف PDF بعد الترميز كبير، يرجى ضغط الملف أو استخدام رابط خارجي مباشر.');
+          return;
+        }
+        setCatalogForm((prev) => ({
+          ...prev,
+          fileType: 'pdf',
+          fileUrl: dataUrl,
+          fileName: file.name,
+          title: prev.title.trim() ? prev.title : file.name.replace(/\.pdf$/i, '')
+        }));
+        showToast('تم تجهيز ملف كتالوج الـ PDF للرفع وحفظه للعملاء بنجاح');
+      } else {
+        const compressed = await compressImageFile(file, 1400, 220000);
+        setCatalogForm((prev) => ({
+          ...prev,
+          fileType: 'image',
+          fileUrl: compressed,
+          fileName: file.name,
+          title: prev.title.trim() ? prev.title : file.name.replace(/\.[^.]+$/, '')
+        }));
+        showToast('تم ضغط صورة كارت الألوان وتجهيزها للعرض بأعلى وضوح');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'تعذر معالجة الملف المرفق');
+    } finally {
+      setIsUploadingCatalog(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleEditCatalogStart = (cat: PaintCatalog) => {
+    setEditingCatalogId(cat.id);
+    setCatalogForm({
+      title: cat.title,
+      brand: cat.brand || '',
+      fileType: cat.fileType,
+      fileUrl: cat.fileUrl,
+      fileName: cat.fileName || '',
+      description: cat.description || ''
+    });
+  };
+
+  const handleCancelCatalogEdit = () => {
+    setEditingCatalogId(null);
+    setCatalogForm({
+      title: '',
+      brand: '',
+      fileType: 'pdf',
+      fileUrl: '',
+      fileName: '',
+      description: ''
+    });
+  };
+
+  const handleSaveCatalog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (catalogForm.title.trim().length < 2) {
+      showToast('يرجى إدخال عنوان للكتالوج');
+      return;
+    }
+    const cleanUrl = catalogForm.fileUrl.trim();
+    if (cleanUrl.length < 5) {
+      showToast('يرجى رفع ملف PDF/صورة أو لصق رابط الكتالوج');
+      return;
+    }
+    if (cleanUrl.length > 950000) {
+      showToast('حجم الملف المرفق كبير جداً للحفظ المباشر. يرجى ضغط الملف أو استخدام رابط خارجي.');
+      return;
+    }
+    try {
+      if (editingCatalogId) {
+        await updatePaintCatalog(editingCatalogId, {
+          title: catalogForm.title.trim(),
+          brand: catalogForm.brand.trim(),
+          fileType: catalogForm.fileType,
+          fileUrl: cleanUrl,
+          fileName: catalogForm.fileName.trim(),
+          description: catalogForm.description.trim()
+        });
+      } else {
+        await addPaintCatalog({
+          title: catalogForm.title.trim(),
+          brand: catalogForm.brand.trim(),
+          fileType: catalogForm.fileType,
+          fileUrl: cleanUrl,
+          fileName: catalogForm.fileName.trim(),
+          description: catalogForm.description.trim()
+        });
+      }
+      handleCancelCatalogEdit();
+    } catch {
+      // handled in StoreContext
+    }
+  };
+
   // Feature Handlers
   const handleSaveFeature = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -538,7 +776,7 @@ export const AdminDashboard: React.FC = () => {
                 </h1>
                 <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
-                  <span>مزامنة سحابية لحظية متصلة</span>
+                  <span>متصل بقاعدة البيانات مباشرة</span>
                 </span>
               </div>
               <p className="text-xs text-blue-200">
@@ -633,7 +871,17 @@ export const AdminDashboard: React.FC = () => {
               }`}
             >
               <FolderTree className="w-4 h-4" />
-              <span>الأقسام والتصنيفات ({categories.length})</span>
+              <span>الأقسام والصفحات الفرعية ({categories.length})</span>
+            </button>
+
+            <button
+              onClick={() => setAdminSubTab('paint_catalogs')}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-all ${
+                adminSubTab === 'paint_catalogs' ? 'bg-amber-400 text-slate-950 font-black shadow' : 'text-blue-200 hover:bg-white/10'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>كتالوجات الألوان PDF ({paintCatalogs.length})</span>
             </button>
 
             <button
@@ -659,40 +907,18 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Cloud Auth & Sync Status Banner */}
-      <div className="max-w-7xl mx-auto px-4 pt-4">
-        {!isCloudAdmin ? (
-          <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
-            <div className="flex items-center gap-3 text-xs">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-              <div>
-                <div className="font-black text-amber-950">
-                  المزامنة السحابية للنشر غير مفعّلة في هذه الجلسة
-                </div>
-                <p className="text-amber-800 mt-0.5">
-                  لتتمكن من إضافة/تعديل المنتجات والأقسام والبنرات ونصوص الموقع ومزامنتها لحظياً، يرجى تأكيد الدخول بحساب المالك السحابي (Google).
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => signInCloudAdmin()}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow shrink-0"
-            >
-              <Cloud className="w-4 h-4" />
-              <span>تفعيل المزامنة السحابية (Google)</span>
-            </button>
-          </div>
-        ) : !isCloudSeeded ? (
+      {/* Optional Initial Cloud Sync Banner (Direct - No Google Sign-In Required) */}
+      {!isCloudSeeded && (
+        <div className="max-w-7xl mx-auto px-4 pt-4">
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
             <div className="flex items-center gap-3 text-xs">
               <Cloud className="w-5 h-5 text-blue-600 shrink-0" />
               <div>
                 <div className="font-black text-blue-950">
-                  حساب المالك السحابي متصل — إعدادات وأقسام المتجر جاهزة للنشر
+                  لوحة المالك مفتوحة بالكامل — البيانات الأساسية جاهزة للنشر
                 </div>
                 <p className="text-blue-800 mt-0.5">
-                  اضغط لمزامنة الأقسام والبنرات والإعدادات الأساسية إلى قاعدة البيانات السحابية.
+                  اضغط لنشر الإعدادات والأقسام والعلامات التجارية الأساسية على قاعدة البيانات السحابية.
                 </p>
               </div>
             </div>
@@ -705,8 +931,8 @@ export const AdminDashboard: React.FC = () => {
               <span>مزامنة الإعدادات للسحابة الآن</span>
             </button>
           </div>
-        ) : null}
-      </div>
+        </div>
+      )}
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -997,7 +1223,14 @@ export const AdminDashboard: React.FC = () => {
                               <div className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</div>
                             </div>
                           </td>
-                          <td className="p-3.5 text-slate-600">{p.categoryName}</td>
+                          <td className="p-3.5 text-slate-600">
+                            <div className="font-bold text-slate-800">{p.categoryName}</div>
+                            {p.subPageName && (
+                              <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                                ↳ {p.subPageName}
+                              </div>
+                            )}
+                          </td>
                           <td className="p-3.5 font-black text-rose-600">
                             EGP {p.price.toFixed(2)}
                           </td>
@@ -1327,20 +1560,356 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 5: CATEGORIES MANAGER (Add, Edit & Delete) */}
+        {/* TAB 5: CATEGORIES & SUBPAGES MANAGER (Add, Edit & Delete) */}
         {adminSubTab === 'categories' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 h-fit">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <FolderTree className="w-4 h-4 text-blue-600" />
+                    <span>{editingCategoryId ? 'تعديل بيانات القسم' : 'إضافة قسم رئيسي جديد'}</span>
+                  </h3>
+                  {editingCategoryId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelCategoryEdit}
+                      className="text-[11px] font-bold text-rose-600 hover:underline"
+                    >
+                      إلغاء التعديل
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleAddCategorySubmit} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">اسم القسم *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      placeholder="مثال: دهانات، حدايد، عدد يدوية، سباكة..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">وصف مختصر</label>
+                    <input
+                      type="text"
+                      value={newCatDesc}
+                      onChange={(e) => setNewCatDesc(e.target.value)}
+                      placeholder="شرح للمنتجات المندرجة تحت هذا القسم..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">صورة القسم (رابط أو رفع من جهازك)</label>
+                      <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200">
+                        <Upload className="w-3 h-3" />
+                        <span>{isCompressingImage ? 'جاري...' : 'رفع صورة'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCategoryFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      value={newCatImage}
+                      onChange={(e) => setNewCatImage(e.target.value)}
+                      placeholder="https://... أو ارفع صورة من الجهاز"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                    />
+                    {newCatImage && (
+                      <img
+                        src={newCatImage}
+                        alt="معاينة القسم"
+                        className="w-16 h-16 rounded-full object-cover border border-slate-200 mt-2 mx-auto"
+                      />
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow"
+                  >
+                    {editingCategoryId ? 'حفظ تعديلات القسم' : 'إضافة القسم الآن'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+                <h3 className="text-sm font-black text-slate-900">
+                  الأقسام الرئيسية المفعلة حالياً ({categories.length})
+                </h3>
+
+                <div className="divide-y divide-slate-100">
+                  {categories.map((cat) => {
+                    const count = products.filter(p => p.categoryId === cat.id).length;
+                    const subCount = subPages.filter(sp => sp.categoryId === cat.id).length;
+                    const isSelectedForSub = managingSubPagesCatId === cat.id;
+                    return (
+                      <div key={cat.id} className="py-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={cat.image}
+                            alt={cat.name}
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-900 text-xs sm:text-sm truncate">{cat.name}</div>
+                            <div className="text-[11px] text-slate-500 line-clamp-1">{cat.description}</div>
+                            <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold">
+                              <span className="text-blue-600">{count} منتج</span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-indigo-600">{subCount} صفحة فرعية</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManagingSubPagesCatId(cat.id);
+                              setEditingSubPageId(null);
+                              setSubPageForm({ name: '', description: '', image: '' });
+                            }}
+                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-black flex items-center gap-1 border transition-colors ${
+                              isSelectedForSub
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                            }`}
+                            title="إدارة الصفحات الفرعية لهذا القسم"
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                            <span>الصفحات الفرعية ({subCount})</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleEditCategoryStart(cat)}
+                            className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                            title="تعديل القسم"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`هل أنت متأكد من حذف قسم: ${cat.name} وجميع صفحاته الفرعية؟`)) {
+                                deleteCategory(cat.id);
+                              }
+                            }}
+                            className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                            title="حذف القسم"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+
+            {/* SubPages Management Inside Selected Category */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+              <div className="lg:col-span-4 bg-white rounded-2xl border border-indigo-200 p-5 shadow-sm space-y-4 h-fit">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-black text-indigo-950 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    <span>{editingSubPageId ? 'تعديل صفحة فرعية' : 'إضافة صفحة فرعية داخل قسم'}</span>
+                  </h3>
+                  {editingSubPageId && (
+                    <button
+                      type="button"
+                      onClick={handleCancelSubPageEdit}
+                      className="text-[11px] font-bold text-rose-600 hover:underline"
+                    >
+                      إلغاء
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveSubPage} className="space-y-3 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">القسم الرئيسي التابع له *</label>
+                    <select
+                      value={managingSubPagesCatId}
+                      onChange={(e) => {
+                        setManagingSubPagesCatId(e.target.value);
+                        setEditingSubPageId(null);
+                        setSubPageForm({ name: '', description: '', image: '' });
+                      }}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-indigo-900"
+                    >
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">اسم الصفحة الفرعية *</label>
+                    <input
+                      type="text"
+                      required
+                      value={subPageForm.name}
+                      onChange={(e) => setSubPageForm({ ...subPageForm, name: e.target.value })}
+                      placeholder="مثال: دهانات بلاستيك داخلي، دهانات أخشاب، برايمر..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">وصف الصفحة الفرعية (اختياري)</label>
+                    <input
+                      type="text"
+                      value={subPageForm.description}
+                      onChange={(e) => setSubPageForm({ ...subPageForm, description: e.target.value })}
+                      placeholder="نبذة تظهر للعملاء عند فتح الصفحة الفرعية..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-slate-700">أيقونة أو صورة (اختياري)</label>
+                      <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] border border-indigo-200">
+                        <Upload className="w-3 h-3" />
+                        <span>{isCompressingImage ? 'جاري...' : 'رفع صورة'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSubPageFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      value={subPageForm.image}
+                      onChange={(e) => setSubPageForm({ ...subPageForm, image: e.target.value })}
+                      placeholder="اتركه فارغاً أو ضع رابط صورة"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow"
+                  >
+                    {editingSubPageId ? 'حفظ تعديلات الصفحة الفرعية' : 'إضافة الصفحة الفرعية الآن'}
+                  </button>
+                </form>
+              </div>
+
+              <div className="lg:col-span-8 bg-white rounded-2xl border border-indigo-200 p-5 shadow-sm space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-indigo-600" />
+                    <span>
+                      الصفحات الفرعية داخل قسم:{' '}
+                      <span className="text-indigo-700">
+                        {categories.find((c) => c.id === managingSubPagesCatId)?.name || 'غير محدد'}
+                      </span>
+                    </span>
+                  </h3>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    يمكنك إضافة أي عدد من الصفحات الفرعية وربط المنتجات بها
+                  </span>
+                </div>
+
+                {subPages.filter((sp) => sp.categoryId === managingSubPagesCatId).length === 0 ? (
+                  <div className="p-8 text-center rounded-xl bg-slate-50 border border-dashed border-slate-300 text-xs text-slate-500 space-y-1">
+                    <div className="font-black text-slate-700">لا توجد صفحات فرعية مضافة داخل هذا القسم حتى الآن</div>
+                    <p>استخدم النموذج الجانبي لإضافة أول صفحة فرعية داخل هذا القسم لتظهر فوراً للعملاء.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {subPages
+                      .filter((sp) => sp.categoryId === managingSubPagesCatId)
+                      .map((sp) => {
+                        const spProductCount = products.filter((p) => p.subPageId === sp.id).length;
+                        return (
+                          <div
+                            key={sp.id}
+                            className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {sp.image ? (
+                                <img
+                                  src={sp.image}
+                                  alt={sp.name}
+                                  className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                                  <Layers className="w-4 h-4" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="font-black text-slate-900 text-xs truncate">{sp.name}</div>
+                                {sp.description && (
+                                  <div className="text-[11px] text-slate-500 line-clamp-1">{sp.description}</div>
+                                )}
+                                <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                                  {spProductCount} منتج مرتبط بهذه الصفحة
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => handleEditSubPageStart(sp)}
+                                className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                title="تعديل الصفحة الفرعية"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`هل أنت متأكد من حذف الصفحة الفرعية: ${sp.name}؟`)) {
+                                    deleteSubPage(sp.id);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
+                                title="حذف الصفحة الفرعية"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5A: PAINT CATALOGS (PDF & IMAGES) MANAGER */}
+        {adminSubTab === 'paint_catalogs' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 h-fit">
+            <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 h-fit">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <FolderTree className="w-4 h-4 text-blue-600" />
-                  <span>{editingCategoryId ? 'تعديل بيانات القسم' : 'إضافة قسم / تصنيف جديد'}</span>
+                  <BookOpen className="w-4 h-4 text-amber-600" />
+                  <span>{editingCatalogId ? 'تعديل كتالوج ألوان' : 'إرفاق كتالوج ألوان جديد (PDF أو صورة)'}</span>
                 </h3>
-                {editingCategoryId && (
+                {editingCatalogId && (
                   <button
                     type="button"
-                    onClick={handleCancelCategoryEdit}
+                    onClick={handleCancelCatalogEdit}
                     className="text-[11px] font-bold text-rose-600 hover:underline"
                   >
                     إلغاء التعديل
@@ -1348,118 +1917,234 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              <form onSubmit={handleAddCategorySubmit} className="space-y-3 text-xs">
+              <form onSubmit={handleSaveCatalog} className="space-y-3 text-xs">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">اسم القسم *</label>
+                  <label className="font-bold text-slate-700 block mb-1">اسم الكتالوج / كارت الألوان *</label>
                   <input
                     type="text"
                     required
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    placeholder="مثال: عدد قطع ولحام، مهمات سباكة..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                    value={catalogForm.title}
+                    onChange={(e) => setCatalogForm({ ...catalogForm, title: e.target.value })}
+                    placeholder="مثال: كتالوج ألوان جوتن فينوماستيك 2026"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
                   />
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">وصف مختصر</label>
-                  <input
-                    type="text"
-                    value={newCatDesc}
-                    onChange={(e) => setNewCatDesc(e.target.value)}
-                    placeholder="شرح للمنتجات المندرجة تحت هذا القسم..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
-                  />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الشركة / الماركة</label>
+                    <input
+                      type="text"
+                      value={catalogForm.brand}
+                      onChange={(e) => setCatalogForm({ ...catalogForm, brand: e.target.value })}
+                      placeholder="JOTUN, GLC, PACHIN..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">نوع الملف *</label>
+                    <select
+                      value={catalogForm.fileType}
+                      onChange={(e) =>
+                        setCatalogForm({ ...catalogForm, fileType: e.target.value as 'pdf' | 'image' })
+                      }
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                    >
+                      <option value="pdf">ملف كتالوج PDF</option>
+                      <option value="image">صورة كارت ألوان</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-slate-700">صورة القسم (رابط أو رفع من جهازك)</label>
-                    <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200">
+                    <label className="font-bold text-slate-700">
+                      {catalogForm.fileType === 'pdf'
+                        ? 'رفع ملف PDF أو وضع رابط مباشر *'
+                        : 'رفع صورة الكتالوج أو وضع رابط *'}
+                    </label>
+                    <label className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[10px] border border-amber-300">
                       <Upload className="w-3 h-3" />
-                      <span>{isCompressingImage ? 'جاري...' : 'رفع صورة'}</span>
+                      <span>
+                        {isUploadingCatalog
+                          ? 'جاري المعالجة...'
+                          : catalogForm.fileType === 'pdf'
+                          ? 'اختيار ملف PDF'
+                          : 'اختيار صورة'}
+                      </span>
                       <input
                         type="file"
-                        accept="image/*"
-                        onChange={handleCategoryFileUpload}
+                        accept={catalogForm.fileType === 'pdf' ? 'application/pdf,.pdf' : 'image/*'}
+                        onChange={handleCatalogFileUpload}
                         className="hidden"
                       />
                     </label>
                   </div>
+
                   <input
                     type="text"
-                    value={newCatImage}
-                    onChange={(e) => setNewCatImage(e.target.value)}
-                    placeholder="https://... أو ارفع صورة من الجهاز"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono"
+                    required
+                    value={catalogForm.fileUrl}
+                    onChange={(e) => setCatalogForm({ ...catalogForm, fileUrl: e.target.value })}
+                    placeholder={
+                      catalogForm.fileType === 'pdf'
+                        ? 'https://... (رابط PDF أو ارفع مباشرة حتى 680 كيلوبايت)'
+                        : 'https://... أو ارفع صورة كارت الألوان من جهازك'
+                    }
+                    dir="ltr"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono text-[11px]"
                   />
-                  {newCatImage && (
-                    <img
-                      src={newCatImage}
-                      alt="معاينة القسم"
-                      className="w-16 h-16 rounded-full object-cover border border-slate-200 mt-2 mx-auto"
-                    />
+
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {catalogForm.fileType === 'pdf'
+                      ? 'يمكنك رفع ملف PDF مباشرة (حتى 680 كيلوبايت) أو لصق رابط مباشر من Google Drive / أي استضافة للملفات الكبيرة.'
+                      : 'يتم ضغط الصورة تلقائياً بجودة واضحة لعرض ألوان الكارت بدقة عالية.'}
+                  </p>
+
+                  {catalogForm.fileName && (
+                    <div className="mt-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1 inline-flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>الملف المحدد: {catalogForm.fileName}</span>
+                    </div>
                   )}
+
+                  {catalogForm.fileType === 'image' && catalogForm.fileUrl && (
+                    <div className="mt-2 p-2 bg-slate-50 border border-slate-200 rounded-xl">
+                      <img
+                        src={catalogForm.fileUrl}
+                        alt="معاينة الكتالوج"
+                        className="max-h-36 mx-auto rounded-lg object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">وصف أو ملاحظات للعملاء (اختياري)</label>
+                  <textarea
+                    rows={2}
+                    value={catalogForm.description}
+                    onChange={(e) => setCatalogForm({ ...catalogForm, description: e.target.value })}
+                    placeholder="مثال: تصفح الكتالوج واختر كود اللون المطلوب وسنقوم بتلوينه لك بالكمبيوتر فوراً..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium"
+                  />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow"
+                  disabled={isUploadingCatalog}
+                  className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-black shadow"
                 >
-                  {editingCategoryId ? 'حفظ تعديلات القسم' : 'إضافة القسم الآن'}
+                  {editingCatalogId ? 'حفظ تعديلات الكتالوج' : 'نشر الكتالوج في قسم كمبيوتر الألوان'}
                 </button>
               </form>
             </div>
 
-            <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
-              <h3 className="text-sm font-black text-slate-900">
-                أقسام المتجر المفعلة حالياً ({categories.length})
-              </h3>
+            <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900">
+                  كتالوجات وكروت ألوان الكمبيوتر المرفقة ({paintCatalogs.length})
+                </h3>
+                <span className="text-[11px] font-bold text-blue-600">
+                  تظهر للعملاء داخل نافذة «كمبيوتر الألوان»
+                </span>
+              </div>
 
-              <div className="divide-y divide-slate-100">
-                {categories.map((cat) => {
-                  const count = products.filter(p => p.categoryId === cat.id).length;
-                  return (
-                    <div key={cat.id} className="py-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={cat.image}
-                          alt={cat.name}
-                          className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
-                        />
-                        <div>
-                          <div className="font-bold text-slate-900 text-xs sm:text-sm">{cat.name}</div>
-                          <div className="text-[11px] text-slate-500">{cat.description}</div>
-                          <div className="text-[10px] text-blue-600 font-bold mt-0.5">{count} صنف مسجل في هذا القسم</div>
+              {paintCatalogs.length === 0 ? (
+                <div className="p-10 text-center bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-xs text-slate-500 space-y-2">
+                  <BookOpen className="w-10 h-10 text-amber-400 mx-auto" />
+                  <div className="font-black text-slate-800 text-sm">لا توجد كتالوجات ألوان مرفقة حتى الآن</div>
+                  <p className="max-w-md mx-auto">
+                    أرفق ملفات PDF أو صور لكروت ألوان شركات الدهانات (جوتن، باكين، GLC، سايبس...) ليتمكن عملاؤك من تصفحها واختيار كود اللون بسهولة.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {paintCatalogs.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden flex flex-col justify-between"
+                    >
+                      {cat.fileType === 'image' ? (
+                        <div className="h-36 bg-white border-b border-slate-200 flex items-center justify-center p-2">
+                          <img
+                            src={cat.fileUrl}
+                            alt={cat.title}
+                            className="max-h-full max-w-full object-contain rounded"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-24 bg-gradient-to-br from-rose-50 to-amber-50 border-b border-slate-200 flex items-center justify-center gap-2 text-rose-700 font-black text-xs">
+                          <FileText className="w-8 h-8 text-rose-600" />
+                          <span>ملف كتالوج PDF</span>
+                        </div>
+                      )}
+
+                      <div className="p-3.5 space-y-1.5 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              cat.fileType === 'pdf'
+                                ? 'bg-rose-100 text-rose-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}
+                          >
+                            {cat.fileType === 'pdf' ? 'PDF' : 'صورة كارت'}
+                          </span>
+                          {cat.brand && (
+                            <span className="text-[10px] font-black text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+                              {cat.brand}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-black text-slate-900 text-xs line-clamp-1">{cat.title}</h4>
+                        {cat.description && (
+                          <p className="text-[11px] text-slate-500 line-clamp-2">{cat.description}</p>
+                        )}
+                      </div>
+
+                      <div className="px-3.5 py-2.5 bg-white border-t border-slate-200 flex items-center justify-between gap-2">
+                        {cat.fileUrl.startsWith('http') ? (
+                          <a
+                            href={cat.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>فتح الرابط</span>
+                          </a>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-600">مرفق سحابياً</span>
+                        )}
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleEditCatalogStart(cat)}
+                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            title="تعديل"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`حذف الكتالوج: ${cat.title}؟`)) {
+                                deletePaintCatalog(cat.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100"
+                            title="حذف"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => handleEditCategoryStart(cat)}
-                          className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                          title="تعديل القسم"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`هل أنت متأكد من حذف قسم: ${cat.name}؟`)) {
-                              deleteCategory(cat.id);
-                            }
-                          }}
-                          className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                          title="حذف القسم"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
-
           </div>
         )}
 
@@ -2276,24 +2961,64 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">الماركة / الشركة *</label>
-                  <input
-                    type="text"
-                    required
-                    value={productForm.brand}
-                    onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })}
-                    placeholder="BOSCH, TOTAL, WADFOW, جوتن..."
+                  <label className="font-bold text-slate-700 block mb-1">العلامة التجارية / الشركة *</label>
+                  <select
+                    value={isCustomBrandMode ? '__custom__' : productForm.brand}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '__custom__') {
+                        setIsCustomBrandMode(true);
+                        setProductForm({ ...productForm, brand: '' });
+                      } else {
+                        setIsCustomBrandMode(false);
+                        setProductForm({ ...productForm, brand: val });
+                      }
+                    }}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  >
+                    {brands.map((br) => (
+                      <option key={br.id} value={br.name}>
+                        {br.name} — {br.label}
+                      </option>
+                    ))}
+                    <option value="الموان">الموان — منتج خاص بالمتجر</option>
+                    <option value="__custom__">أخرى (كتابة اسم ماركة أخرى يدوياً...)</option>
+                  </select>
+
+                  {isCustomBrandMode ? (
+                    <input
+                      type="text"
+                      required
+                      value={productForm.brand}
+                      onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })}
+                      placeholder="اكتب اسم الماركة..."
+                      className="w-full mt-2 bg-white border border-blue-300 rounded-xl p-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    (() => {
+                      const selectedBrandObj = brands.find((b) => b.name === productForm.brand);
+                      if (!selectedBrandObj?.logoUrl) return null;
+                      return (
+                        <div className="mt-1.5 inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                          <img
+                            src={selectedBrandObj.logoUrl}
+                            alt={selectedBrandObj.name}
+                            className="h-5 w-auto max-w-[48px] object-contain"
+                          />
+                          <span className="text-[10px] font-bold text-slate-600">{selectedBrandObj.label}</span>
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">القسم / التصنيف *</label>
+                  <label className="font-bold text-slate-700 block mb-1">القسم الرئيسي *</label>
                   <select
                     value={productForm.categoryId}
-                    onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}
+                    onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value, subPageId: '' })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {categories.map((c) => (
@@ -2301,6 +3026,26 @@ export const AdminDashboard: React.FC = () => {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">الصفحة الفرعية داخل القسم (اختياري)</label>
+                <select
+                  value={productForm.subPageId}
+                  onChange={(e) => setProductForm({ ...productForm, subPageId: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">
+                    {subPages.some((sp) => sp.categoryId === productForm.categoryId)
+                      ? 'عام داخل القسم الرئيسي (بدون صفحة فرعية محددة)'
+                      : 'لا توجد صفحات فرعية مضافة داخل هذا القسم'}
+                  </option>
+                  {subPages
+                    .filter((sp) => sp.categoryId === productForm.categoryId)
+                    .map((sp) => (
+                      <option key={sp.id} value={sp.id}>{sp.name}</option>
+                    ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-3 gap-3">

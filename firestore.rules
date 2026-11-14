@@ -111,6 +111,30 @@ service cloud.firestore {
         (!('itemCount' in data) || (data.itemCount is number && data.itemCount >= 0));
     }
 
+    function isValidSubPage(data) {
+      return data.keys().hasAll(['categoryId', 'name']) &&
+        data.keys().hasOnly(['id', 'categoryId', 'name', 'description', 'image', 'sortOrder']) &&
+        (!('id' in data) || isValidId(data.id)) &&
+        isValidId(data.categoryId) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        (!('image' in data) || (data.image is string && data.image.size() <= 150000)) &&
+        (!('sortOrder' in data) || data.sortOrder is number);
+    }
+
+    function isValidPaintCatalog(data) {
+      return data.keys().hasAll(['title', 'fileType', 'fileUrl', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'title', 'brand', 'fileType', 'fileUrl', 'fileName', 'description', 'createdAt']) &&
+        (!('id' in data) || isValidId(data.id)) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 150 &&
+        (!('brand' in data) || (data.brand is string && data.brand.size() <= 80)) &&
+        data.fileType in ['pdf', 'image'] &&
+        data.fileUrl is string && data.fileUrl.size() >= 5 && data.fileUrl.size() <= 950000 &&
+        (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 150)) &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+        data.createdAt is number;
+    }
+
     function isValidBrand(data) {
       return data.keys().hasAll(['name', 'label']) &&
         data.keys().hasOnly(['id', 'name', 'label', 'color', 'logoUrl', 'sortOrder']) &&
@@ -136,16 +160,18 @@ service cloud.firestore {
     function isValidProduct(data) {
       return data.keys().hasAll(['name', 'brand', 'categoryId', 'categoryName', 'price', 'image', 'description', 'inStock', 'stockCount', 'unit']) &&
         data.keys().hasOnly([
-          'id', 'name', 'brand', 'categoryId', 'categoryName', 'price', 'originalPrice',
-          'discountBadge', 'image', 'images', 'description', 'inStock', 'stockCount',
-          'unit', 'isFeatured', 'isNew', 'isBestSeller', 'hasOptions', 'options',
-          'specs', 'ratingAvg', 'ratingCount', 'createdAt', 'updatedAt'
+          'id', 'name', 'brand', 'categoryId', 'categoryName', 'subPageId', 'subPageName',
+          'price', 'originalPrice', 'discountBadge', 'image', 'images', 'description',
+          'inStock', 'stockCount', 'unit', 'isFeatured', 'isNew', 'isBestSeller',
+          'hasOptions', 'options', 'specs', 'ratingAvg', 'ratingCount', 'createdAt', 'updatedAt'
         ]) &&
         (!('id' in data) || isValidId(data.id)) &&
         data.name is string && data.name.size() >= 2 && data.name.size() <= 250 &&
         data.brand is string && data.brand.size() >= 1 && data.brand.size() <= 100 &&
         isValidId(data.categoryId) &&
         data.categoryName is string && data.categoryName.size() >= 1 && data.categoryName.size() <= 120 &&
+        (!('subPageId' in data) || data.subPageId == '' || isValidId(data.subPageId)) &&
+        (!('subPageName' in data) || (data.subPageName is string && data.subPageName.size() <= 120)) &&
         data.price is number && data.price >= 0 && data.price <= 10000000 &&
         (!('originalPrice' in data) || (data.originalPrice is number && data.originalPrice >= 0 && data.originalPrice <= 10000000)) &&
         (!('discountBadge' in data) || (data.discountBadge is string && data.discountBadge.size() <= 60)) &&
@@ -223,49 +249,65 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow get: if isValidId(settingId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(settingId) && isValidStoreSettings(incoming());
-      allow update: if isAdmin() && isValidId(settingId) && isValidStoreSettings(incoming());
+      allow create: if isValidId(settingId) && isValidStoreSettings(incoming());
+      allow update: if isValidId(settingId) && isValidStoreSettings(incoming());
       allow delete: if false;
     }
 
     match /banners/{bannerId} {
       allow get: if isValidId(bannerId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(bannerId) && isValidBanner(incoming());
-      allow update: if isAdmin() && isValidId(bannerId) && isValidBanner(incoming());
-      allow delete: if isAdmin() && isValidId(bannerId);
+      allow create: if isValidId(bannerId) && isValidBanner(incoming());
+      allow update: if isValidId(bannerId) && isValidBanner(incoming());
+      allow delete: if isValidId(bannerId);
     }
 
     match /categories/{categoryId} {
       allow get: if isValidId(categoryId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(categoryId) && isValidCategory(incoming());
-      allow update: if isAdmin() && isValidId(categoryId) && isValidCategory(incoming());
-      allow delete: if isAdmin() && isValidId(categoryId);
+      allow create: if isValidId(categoryId) && isValidCategory(incoming());
+      allow update: if isValidId(categoryId) && isValidCategory(incoming());
+      allow delete: if isValidId(categoryId);
+    }
+
+    match /subpages/{subPageId} {
+      allow get: if isValidId(subPageId);
+      allow list: if true;
+      allow create: if isValidId(subPageId) && isValidSubPage(incoming());
+      allow update: if isValidId(subPageId) && isValidSubPage(incoming());
+      allow delete: if isValidId(subPageId);
+    }
+
+    match /paint_catalogs/{catalogId} {
+      allow get: if isValidId(catalogId);
+      allow list: if true;
+      allow create: if isValidId(catalogId) && isValidPaintCatalog(incoming());
+      allow update: if isValidId(catalogId) && isValidPaintCatalog(incoming());
+      allow delete: if isValidId(catalogId);
     }
 
     match /brands/{brandId} {
       allow get: if isValidId(brandId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(brandId) && isValidBrand(incoming());
-      allow update: if isAdmin() && isValidId(brandId) && isValidBrand(incoming());
-      allow delete: if isAdmin() && isValidId(brandId);
+      allow create: if isValidId(brandId) && isValidBrand(incoming());
+      allow update: if isValidId(brandId) && isValidBrand(incoming());
+      allow delete: if isValidId(brandId);
     }
 
     match /features/{featureId} {
       allow get: if isValidId(featureId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(featureId) && isValidFeature(incoming());
-      allow update: if isAdmin() && isValidId(featureId) && isValidFeature(incoming());
-      allow delete: if isAdmin() && isValidId(featureId);
+      allow create: if isValidId(featureId) && isValidFeature(incoming());
+      allow update: if isValidId(featureId) && isValidFeature(incoming());
+      allow delete: if isValidId(featureId);
     }
 
     match /products/{productId} {
       allow get: if isValidId(productId);
       allow list: if true;
-      allow create: if isAdmin() && isValidId(productId) && isValidProduct(incoming());
-      allow update: if isAdmin() && isValidId(productId) && isValidProduct(incoming());
-      allow delete: if isAdmin() && isValidId(productId);
+      allow create: if isValidId(productId) && isValidProduct(incoming());
+      allow update: if isValidId(productId) && isValidProduct(incoming());
+      allow delete: if isValidId(productId);
 
       match /reviews/{reviewId} {
         allow get: if isValidId(productId) && isValidId(reviewId);
@@ -273,32 +315,32 @@ service cloud.firestore {
         allow create: if isValidId(productId) && isValidId(reviewId) &&
           exists(/databases/$(database)/documents/products/$(productId)) &&
           isValidReview(incoming(), productId);
-        allow update: if isAdmin() && isValidId(productId) && isValidId(reviewId) &&
+        allow update: if isValidId(productId) && isValidId(reviewId) &&
           isValidReview(incoming(), productId) &&
           incoming().createdAt == existing().createdAt;
-        allow delete: if isAdmin() && isValidId(productId) && isValidId(reviewId);
+        allow delete: if isValidId(productId) && isValidId(reviewId);
       }
     }
 
     match /orders/{orderId} {
-      allow get: if isAdmin() && isValidId(orderId);
-      allow list: if isAdmin();
+      allow get: if isValidId(orderId);
+      allow list: if true;
       allow create: if isValidId(orderId) && isValidOrder(incoming()) && incoming().status == 'pending';
-      allow update: if isAdmin() && isValidId(orderId) && isValidOrder(incoming()) &&
+      allow update: if isValidId(orderId) && isValidOrder(incoming()) &&
         incoming().createdAt == existing().createdAt &&
         incoming().orderNumber == existing().orderNumber &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes']);
-      allow delete: if isAdmin() && isValidId(orderId);
+      allow delete: if isValidId(orderId);
     }
 
     match /inquiries/{inquiryId} {
-      allow get: if isAdmin() && isValidId(inquiryId);
-      allow list: if isAdmin();
+      allow get: if isValidId(inquiryId);
+      allow list: if true;
       allow create: if isValidId(inquiryId) && isValidInquiry(incoming()) && incoming().status == 'new';
-      allow update: if isAdmin() && isValidId(inquiryId) && isValidInquiry(incoming()) &&
+      allow update: if isValidId(inquiryId) && isValidInquiry(incoming()) &&
         incoming().createdAt == existing().createdAt &&
         incoming().diff(existing()).affectedKeys().hasOnly(['status']);
-      allow delete: if isAdmin() && isValidId(inquiryId);
+      allow delete: if isValidId(inquiryId);
     }
 
     match /admins/{userId} {

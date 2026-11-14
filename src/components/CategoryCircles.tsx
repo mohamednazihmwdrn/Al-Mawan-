@@ -1,9 +1,17 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Layers } from 'lucide-react';
 
 export const CategoryCircles: React.FC = () => {
-  const { categories, products, settings, selectedCategoryId, setSelectedCategoryId, setSelectedFilter } = useStore();
+  const {
+    categories,
+    subPages,
+    products,
+    settings,
+    selectedCategoryId,
+    setSelectedCategoryId,
+    setSelectedFilter
+  } = useStore();
 
   if (categories.length === 0) return null;
 
@@ -40,6 +48,7 @@ export const CategoryCircles: React.FC = () => {
         {categories.map((cat) => {
           const isSelected = selectedCategoryId === cat.id;
           const realCount = products.filter((p) => p.categoryId === cat.id).length;
+          const subCount = subPages.filter((sp) => sp.categoryId === cat.id).length;
           return (
             <button
               key={cat.id}
@@ -61,17 +70,30 @@ export const CategoryCircles: React.FC = () => {
                   />
                   <div className="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors" />
                 </div>
+                {subCount > 0 && (
+                  <span
+                    title={`${subCount} صفحة فرعية`}
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-[#163674] text-white text-[9px] font-black px-1.5 py-0.5 rounded-full border border-white shadow flex items-center gap-0.5 whitespace-nowrap"
+                  >
+                    <Layers className="w-2.5 h-2.5 text-amber-300" />
+                    <span>{subCount}</span>
+                  </span>
+                )}
               </div>
 
               <span
-                className={`text-xs sm:text-sm font-bold mt-2 line-clamp-2 max-w-[90px] sm:max-w-[110px] transition-colors leading-tight ${
+                className={`text-xs sm:text-sm font-bold mt-2.5 line-clamp-2 max-w-[90px] sm:max-w-[110px] transition-colors leading-tight ${
                   isSelected ? 'text-amber-600 font-black' : 'text-slate-800 group-hover:text-blue-700'
                 }`}
               >
                 {cat.name}
               </span>
               <span className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                {realCount > 0 ? `${realCount} صنف` : 'قسم رئيسي'}
+                {realCount > 0
+                  ? `${realCount} صنف`
+                  : subCount > 0
+                  ? `${subCount} صفحات فرعية`
+                  : 'قسم رئيسي'}
               </span>
             </button>
           );

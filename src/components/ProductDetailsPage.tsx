@@ -40,7 +40,7 @@ export const ProductDetailsPage: React.FC = () => {
     addProductReview,
     deleteProductReview,
     updateProduct,
-    isCloudAdmin,
+    isOwnerAuthenticated,
     isCloudSeeded,
     showToast
   } = useStore();
@@ -171,7 +171,7 @@ export const ProductDetailsPage: React.FC = () => {
         comment: reviewComment.trim()
       });
 
-      if (isCloudAdmin) {
+      if (isOwnerAuthenticated) {
         const nextCount = reviews.length + 1;
         const nextAvg =
           (reviews.reduce((sum, r) => sum + r.rating, 0) + reviewRating) / nextCount;
@@ -186,7 +186,7 @@ export const ProductDetailsPage: React.FC = () => {
       setReviewRating(5);
     } catch {
       if (!isCloudSeeded) {
-        showToast('يرجى من مالك المتجر تفعيل المزامنة السحابية ونشر الكتالوج لحفظ التقييمات.');
+        showToast('تعذر حفظ التقييم مؤقتاً، يرجى المحاولة مرة أخرى بعد قليل.');
       } else {
         showToast('تعذر نشر التقييم حالياً، يرجى المحاولة مرة أخرى.');
       }
@@ -199,7 +199,7 @@ export const ProductDetailsPage: React.FC = () => {
     if (!confirm('هل تريد حذف هذا التعليق نهائياً؟')) return;
     try {
       await deleteProductReview(selectedProduct.id, reviewId);
-      if (isCloudAdmin) {
+      if (isOwnerAuthenticated) {
         const remaining = reviews.filter((r) => r.id !== reviewId);
         const nextCount = remaining.length;
         const nextAvg =
@@ -765,7 +765,7 @@ export const ProductDetailsPage: React.FC = () => {
                             />
                           ))}
                         </div>
-                        {isCloudAdmin && (
+                        {isOwnerAuthenticated && (
                           <button
                             type="button"
                             onClick={() => handleDeleteReview(rev.id)}

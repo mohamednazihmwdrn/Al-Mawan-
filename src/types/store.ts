@@ -4,6 +4,8 @@ export interface Product {
   brand: string;
   categoryId: string;
   categoryName: string;
+  subPageId?: string;
+  subPageName?: string;
   price: number;
   originalPrice?: number;
   discountBadge?: string;
@@ -53,6 +55,26 @@ export interface Category {
   description?: string;
   image: string;
   itemCount?: number;
+}
+
+export interface SubPage {
+  id: string;
+  categoryId: string;
+  name: string;
+  description?: string;
+  image?: string;
+  sortOrder?: number;
+}
+
+export interface PaintCatalog {
+  id: string;
+  title: string;
+  brand?: string;
+  fileType: 'pdf' | 'image';
+  fileUrl: string;
+  fileName?: string;
+  description?: string;
+  createdAt: number;
 }
 
 export interface StoreBrand {

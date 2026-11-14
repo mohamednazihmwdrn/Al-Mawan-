@@ -46,27 +46,32 @@ export const BrandsSection: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
           {brands.map((brand) => {
             const colorClass = (brand.color && BRAND_COLOR_MAP[brand.color]) || 'text-blue-700';
             return (
               <button
                 key={brand.id}
                 onClick={() => handleBrandClick(brand.name)}
-                className="p-4 sm:p-5 rounded-2xl bg-slate-50 hover:bg-slate-100/90 border border-slate-200/80 flex flex-col items-center justify-center transition-all duration-200 hover:shadow-md hover:border-slate-300 group"
+                className="p-3.5 sm:p-4 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/80 flex flex-col items-center justify-between transition-all duration-200 hover:shadow-md hover:border-blue-300 group min-h-[115px] sm:min-h-[128px]"
               >
                 {brand.logoUrl ? (
-                  <img
-                    src={brand.logoUrl}
-                    alt={brand.name}
-                    className="h-9 sm:h-11 object-contain mb-1.5 group-hover:scale-105 transition-transform"
-                  />
+                  <div className="w-full h-14 sm:h-16 rounded-xl bg-white border border-slate-100 flex items-center justify-center p-2 mb-2 overflow-hidden shadow-2xs">
+                    <img
+                      src={brand.logoUrl}
+                      alt={`${brand.name} - ${brand.label}`}
+                      loading="lazy"
+                      className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
                 ) : (
-                  <span className={`text-base sm:text-xl font-black tracking-wider uppercase ${colorClass} group-hover:scale-110 transition-transform font-mono`}>
-                    {brand.name}
-                  </span>
+                  <div className="h-14 sm:h-16 flex items-center justify-center mb-2">
+                    <span className={`text-base sm:text-xl font-black tracking-wider uppercase ${colorClass} group-hover:scale-110 transition-transform font-mono`}>
+                      {brand.name}
+                    </span>
+                  </div>
                 )}
-                <span className="text-[11px] font-bold text-slate-500 mt-1 group-hover:text-slate-800 transition-colors">
+                <span className="text-[11px] sm:text-xs font-bold text-slate-600 group-hover:text-blue-800 transition-colors line-clamp-1">
                   {brand.label}
                 </span>
               </button>

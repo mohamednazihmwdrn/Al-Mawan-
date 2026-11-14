@@ -134,14 +134,23 @@ export const INITIAL_CATEGORIES: Category[] = [
 ];
 
 export const INITIAL_BRANDS: StoreBrand[] = [
-  { id: "brand-1", name: "TOTAL", label: "توتال تولز", color: "#0089c4", sortOrder: 0 },
-  { id: "brand-2", name: "BOSCH", label: "بوش الألمانية", color: "#c8102e", sortOrder: 1 },
-  { id: "brand-3", name: "WADFOW", label: "وادفو تكنولوجي", color: "#f97316", sortOrder: 2 },
-  { id: "brand-4", name: "JOTUN", label: "دهانات جوتن", color: "#0284c7", sortOrder: 3 },
-  { id: "brand-5", name: "SIPES", label: "بويات سايبس", color: "#16a34a", sortOrder: 4 },
-  { id: "brand-6", name: "Schneider", label: "شنايدر إلكتريك", color: "#059669", sortOrder: 5 },
-  { id: "brand-7", name: "السويدي", label: "السويدي للكابلات", color: "#dc2626", sortOrder: 6 },
-  { id: "brand-8", name: "AIWO", label: "أيوو للأدوات", color: "#2563eb", sortOrder: 7 }
+  { id: "brand-pachin", name: "PACHIN", label: "باكين للدهانات", color: "indigo", logoUrl: "/assets/aistudio/images__7__11718147.jpeg", sortOrder: 0 },
+  { id: "brand-jotun", name: "JOTUN", label: "دهانات جوتن", color: "blue", logoUrl: "/assets/aistudio/images_4520ed84.png", sortOrder: 1 },
+  { id: "brand-glc", name: "GLC", label: "جي إل سي للدهانات", color: "red", logoUrl: "/assets/aistudio/images__1__cb7c7b1c.jpeg", sortOrder: 2 },
+  { id: "brand-sipes", name: "SIPES", label: "بويات سايبس", color: "red", logoUrl: "/assets/aistudio/images__3__ec595a99.jpeg", sortOrder: 3 },
+  { id: "brand-mido", name: "MIDO", label: "ميدو للدهانات", color: "indigo", logoUrl: "/assets/aistudio/images__2__430e7f0f.png", sortOrder: 4 },
+  { id: "brand-cmb", name: "CMB GROUP", label: "كيماويات البناء الحديث CMB", color: "blue", logoUrl: "/assets/aistudio/images__2__1092c755.jpeg", sortOrder: 5 },
+  { id: "brand-gyproc", name: "Gyproc", label: "جيبروك سان جوبان", color: "sky", logoUrl: "/assets/aistudio/images__1__91ad340e.png", sortOrder: 6 },
+  { id: "brand-ingco", name: "INGCO", label: "إنجكو للعدد والمعدات", color: "orange", logoUrl: "/assets/aistudio/images__5__8011492c.jpeg", sortOrder: 7 },
+  { id: "brand-apt", name: "APT", label: "إيه بي تي للعدد", color: "red", logoUrl: "/assets/aistudio/images__4__579ec58e.jpeg", sortOrder: 8 },
+  { id: "brand-ahram", name: "AHRAM", label: "الأهرام للأقفال والكوالين", color: "slate", logoUrl: "/assets/aistudio/images__3__fbecccb1.png", sortOrder: 9 },
+  { id: "brand-ilock", name: "iLOCK", label: "آي لوك لأدوات الكهرباء", color: "amber", logoUrl: "/assets/aistudio/images__6__0792c347.jpeg", sortOrder: 10 },
+  { id: "brand-mohandes", name: "المهندس", label: "المهندس للكيماويات", color: "blue", logoUrl: "/assets/aistudio/images__4__31c12059.png", sortOrder: 11 },
+  { id: "brand-swedish", name: "SWEDISH CO.", label: "الشركة السويدية", color: "blue", logoUrl: "/assets/aistudio/5d8cdd33500d8_63f2227e.jpg", sortOrder: 12 }
+];
+
+export const LEGACY_TEXT_BRAND_IDS = [
+  'brand-1', 'brand-2', 'brand-3', 'brand-4', 'brand-5', 'brand-6', 'brand-7', 'brand-8'
 ];
 
 export const INITIAL_FEATURES: StoreFeature[] = [
