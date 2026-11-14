@@ -41,6 +41,7 @@ export const ProductDetailsPage: React.FC = () => {
     deleteProductReview,
     updateProduct,
     isOwnerAuthenticated,
+    isFirebaseAdmin,
     isCloudSeeded,
     showToast
   } = useStore();
@@ -178,7 +179,7 @@ export const ProductDetailsPage: React.FC = () => {
         comment: reviewComment.trim()
       });
 
-      if (isOwnerAuthenticated) {
+      if (isOwnerAuthenticated && isFirebaseAdmin) {
         const nextCount = reviews.length + 1;
         const nextAvg =
           (reviews.reduce((sum, r) => sum + r.rating, 0) + reviewRating) / nextCount;
@@ -206,7 +207,7 @@ export const ProductDetailsPage: React.FC = () => {
     setConfirmDeleteReviewId(null);
     try {
       await deleteProductReview(selectedProduct.id, reviewId);
-      if (isOwnerAuthenticated) {
+      if (isOwnerAuthenticated && isFirebaseAdmin) {
         const remaining = reviews.filter((r) => r.id !== reviewId);
         const nextCount = remaining.length;
         const nextAvg =
@@ -772,7 +773,7 @@ export const ProductDetailsPage: React.FC = () => {
                             />
                           ))}
                         </div>
-                        {isOwnerAuthenticated && (
+                        {isOwnerAuthenticated && isFirebaseAdmin && (
                           confirmDeleteReviewId === rev.id ? (
                             <div className="flex items-center gap-1">
                               <button
