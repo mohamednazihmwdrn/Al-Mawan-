@@ -122,7 +122,7 @@ export const ProductGrid: React.FC = () => {
                 ? currentCategory.description
                 : products.length > 0
                 ? `إجمالي المنتجات المعروضة: ${filteredProducts.length} صنف`
-                : 'المتجر جاهز لاستقبال المنتجات الحقيقية من المالك'}
+                : 'تصفح أقسام المتجر وتواصل معنا للطلب الفوري'}
             </p>
           </div>
 

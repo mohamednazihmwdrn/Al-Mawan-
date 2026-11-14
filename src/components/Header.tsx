@@ -32,8 +32,7 @@ export const Header: React.FC = () => {
     selectedFilter,
     setSelectedFilter,
     setIsPaintStudioOpen,
-    triggerSecretClick,
-    secretClicks
+    triggerSecretClick
   } = useStore();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -92,22 +91,17 @@ export const Header: React.FC = () => {
                 </span>
               </div>
 
-              {/* Full store subtitle + discreet 10-click owner panel trigger */}
+              {/* Full store subtitle */}
               <div className="flex items-center gap-1.5">
                 <span
                   onClick={(e) => {
                     e.stopPropagation();
                     triggerSecretClick();
                   }}
-                  className="text-[11px] sm:text-xs font-bold text-amber-400 hover:text-amber-300 cursor-pointer select-none transition-colors leading-tight"
+                  className="text-[11px] sm:text-xs font-bold text-amber-400 select-none leading-tight"
                 >
                   {settings.storeName.split(' ').slice(1).join(' ') || 'للحدايد والبويات ولوازم المعمار'}
                 </span>
-                {secretClicks > 2 && (
-                  <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-1 rounded-full animate-pulse">
-                    {secretClicks}/10
-                  </span>
-                )}
               </div>
             </div>
           </div>

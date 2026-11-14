@@ -735,7 +735,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           await signOut(auth);
           if (active) {
             setAuthError(
-              `الحساب المختار (${u.email || 'غير معروف'}) غير مصرح له. يرجى تسجيل الدخول بحساب المالك الرسمي فقط: ${OWNER_ADMIN_EMAIL}`
+              'الحساب المختار غير مصرح له. يرجى تسجيل الدخول بحساب المالك الرسمي فقط.'
             );
           }
           return;
@@ -1189,7 +1189,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (u.emailVerified && email === OWNER_ADMIN_EMAIL.toLowerCase()) {
         setFirebaseUser(u);
-        showToast(`تم التحقق من حساب المالك الرسمي (${OWNER_ADMIN_EMAIL}) بنجاح!`);
+        showToast('تم التحقق من حساب المالك بنجاح! يمكنك الآن النشر والتعديل.');
         return true;
       }
 
@@ -1210,7 +1210,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await signOut(auth);
       setFirebaseUser(null);
       setAuthError(
-        `الحساب المختار (${u.email || 'غير معروف'}) غير مصرح له بنشر المنتجات. يرجى تسجيل الدخول بحساب المالك الرسمي فقط: ${OWNER_ADMIN_EMAIL}`
+        'الحساب المختار غير مصرح له بنشر المنتجات. يرجى تسجيل الدخول بحساب المالك الرسمي فقط.'
       );
       return false;
     } catch (err: unknown) {
@@ -1281,7 +1281,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       throw new Error('OWNER_AUTH_REQUIRED');
     }
     if (!isFirebaseAdminRef.current) {
-      showToast(`يرجى تأكيد حساب المالك (${OWNER_ADMIN_EMAIL}) من أعلى لوحة التحكم لتطبيق النشر أو التعديل في قاعدة البيانات.`);
+      showToast('يرجى الضغط على «توثيق حساب المالك الآن» في أعلى لوحة التحكم لتطبيق النشر أو التعديل في قاعدة البيانات.');
       throw new Error('OWNER_FIREBASE_AUTH_REQUIRED');
     }
   };

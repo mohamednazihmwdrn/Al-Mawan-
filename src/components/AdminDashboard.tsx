@@ -797,12 +797,12 @@ export const AdminDashboard: React.FC = () => {
                 {isFirebaseAdmin ? (
                   <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
-                    <span>محمي بالكامل • النشر حصري لـ ({firebaseUserEmail})</span>
+                    <span>محمي بالكامل • النشر حصري للمالك فقط</span>
                   </span>
                 ) : (
                   <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                     <Lock className="w-3 h-3" />
-                    <span>يلزم توثيق حساب المالك للنشر</span>
+                    <span>يلزم توثيق جلسة المالك للنشر</span>
                   </span>
                 )}
               </div>
@@ -941,10 +941,10 @@ export const AdminDashboard: React.FC = () => {
             <div className="space-y-1 text-xs">
               <div className="font-black text-amber-950 flex items-center gap-1.5">
                 <Lock className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>الحماية المشددة مفعّلة: مطلوب توثيق حساب المالك الرسمي للنشر أو التعديل</span>
+                <span>الحماية المشددة مفعّلة: يرجى تأكيد حساب جوجل للمالك لتفعيل النشر والتعديل</span>
               </div>
               <p className="text-amber-900">
-                لحماية متجرك ومنع أي شخص آخر من إضافة أو تعديل المنتجات أو مشاهدة الطلبات، يرجى تأكيد حساب المالك (<span dir="ltr" className="font-mono font-bold">mnazih298@gmail.com</span>).
+                لحماية قاعدة البيانات ومنع أي شخص غيرك من نشر المنتجات أو تعديلها أو قراءة الطلبات، اضغط لتوثيق جلستك لمرة واحدة فقط.
               </p>
               {authError && (
                 <p className="text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1.5 font-bold">

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { settings, categories, setSelectedCategoryId, closeProductDetails, setIsPaintStudioOpen, triggerSecretClick, secretClicks } = useStore();
+  const { settings, categories, setSelectedCategoryId, closeProductDetails, setIsPaintStudioOpen, triggerSecretClick } = useStore();
 
   return (
     <footer className="bg-[#0b1c3d] text-slate-300 pt-12 pb-8 border-t border-white/10 select-none">
@@ -127,20 +127,12 @@ export const Footer: React.FC = () => {
               </div>
             </div>
 
-            {/* Secret Click Trigger under store name */}
+            {/* Store name */}
             <div className="pt-4 border-t border-white/5">
-              <div
-                onClick={triggerSecretClick}
-                className="mt-1.5 p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-amber-400/30 cursor-pointer transition-all flex items-center justify-between"
-              >
-                <span className="font-bold text-slate-200 hover:text-amber-300 transition-colors">
+              <div onClick={triggerSecretClick} className="mt-1.5 py-1">
+                <span className="font-bold text-slate-200 select-none">
                   {settings.storeName}
                 </span>
-                {secretClicks > 2 && (
-                  <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-full animate-bounce">
-                    {secretClicks}/10
-                  </span>
-                )}
               </div>
             </div>
           </div>
@@ -154,7 +146,7 @@ export const Footer: React.FC = () => {
               جميع الحقوق محفوظة © {new Date().getFullYear()} لـ{' '}
               <strong
                 onClick={triggerSecretClick}
-                className="text-slate-300 hover:text-amber-300 cursor-pointer transition-colors"
+                className="text-slate-300 select-none"
               >
                 {settings.storeName}
               </strong>
