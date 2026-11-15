@@ -20,3 +20,318 @@
     -webkit-touch-callout: default;
   }
 }
+
+.mobile-bento-only {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  html,
+  body,
+  #root {
+    max-width: 100vw;
+    overflow-x: clip;
+  }
+
+  .desktop-showcase-only {
+    display: none !important;
+  }
+
+  .mobile-bento-only {
+    display: block;
+  }
+
+  /* Header & Floating WhatsApp containment within 100vw */
+  .mobile-header-brand {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .mobile-header-subtitle {
+    display: block;
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-header-pills {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 11px;
+  }
+
+  .mobile-floating-whatsapp {
+    bottom: 14px !important;
+    left: 14px !important;
+    max-width: calc(100vw - 28px);
+  }
+
+  .mobile-floating-whatsapp button {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  /* Compact 3-Column Category Cards */
+  .mobile-cat-section {
+    padding: 6px !important;
+  }
+
+  .mobile-cat-header {
+    margin-bottom: 6px !important;
+    padding: 0 2px;
+  }
+
+  .mobile-cat-header h2 {
+    font-size: 13px !important;
+  }
+
+  .mobile-cat-header p {
+    font-size: 10px !important;
+  }
+
+  .mobile-cat-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .mobile-cat-item {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .mobile-cat-avatar {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1;
+    border-radius: 6px !important;
+    padding: 0 !important;
+    background: #f8f9fa;
+  }
+
+  .mobile-cat-avatar-inner {
+    border-radius: 6px !important;
+    border-width: 0 !important;
+  }
+
+  .mobile-cat-title {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    margin-top: 4px !important;
+    max-width: 100% !important;
+  }
+
+  .mobile-cat-count {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Amazon-Style 3-Column Bento Grid with 2x2 Sub-Grids */
+  .mobile-products-section {
+    padding: 6px !important;
+  }
+
+  .mobile-search-box {
+    padding: 8px !important;
+    margin-bottom: 8px !important;
+    border-radius: 12px !important;
+  }
+
+  .mobile-bento-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 0;
+  }
+
+  .mobile-bento-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .mobile-bento-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px;
+    width: 100%;
+    text-align: right;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .mobile-bento-card-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .mobile-bento-card-chevron {
+    width: 12px;
+    height: 12px;
+    color: #163674;
+    flex-shrink: 0;
+  }
+
+  .mobile-bento-subgrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+  }
+
+  .mobile-bento-mini-item {
+    display: flex;
+    flex-direction: column;
+    text-align: right;
+    min-width: 0;
+    cursor: pointer;
+  }
+
+  .mobile-bento-thumb-wrap {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 6px;
+    background: #f8f9fa;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+  }
+
+  .mobile-bento-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .mobile-bento-mini-title {
+    font-size: 9px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: #334155;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+  }
+
+  .mobile-bento-mini-price {
+    font-size: 9px;
+    line-height: 1.2;
+    font-weight: 800;
+    color: #be123c;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+  }
+
+  .mobile-bento-mini-price--contact {
+    color: #1d4ed8;
+  }
+
+  /* Compact 3-Column Grid for Category / Search Results */
+  .mobile-products-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    padding: 0 !important;
+  }
+
+  .mobile-product-card {
+    padding: 6px !important;
+    border-radius: 10px !important;
+    min-width: 0;
+  }
+
+  .mobile-card-hide-overlay {
+    display: none !important;
+  }
+
+  .mobile-card-img-box {
+    margin-top: 0 !important;
+    margin-bottom: 4px !important;
+    padding: 2px !important;
+    border-radius: 6px !important;
+    background: #f8f9fa !important;
+    aspect-ratio: 1 / 1;
+  }
+
+  .mobile-card-meta,
+  .mobile-card-rating,
+  .mobile-card-wa-btn {
+    display: none !important;
+  }
+
+  .mobile-card-title {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .mobile-card-price-wrap {
+    padding-top: 3px !important;
+  }
+
+  .mobile-card-price-old {
+    font-size: 8px !important;
+  }
+
+  .mobile-card-price-label {
+    font-size: 9px !important;
+  }
+
+  .mobile-card-price-val {
+    font-size: 10px !important;
+  }
+
+  .mobile-card-contact-price {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+    padding: 2px 4px !important;
+  }
+
+  .mobile-card-actions {
+    margin-top: 4px !important;
+    padding-top: 4px !important;
+    gap: 3px !important;
+  }
+
+  .mobile-card-cart-btn {
+    padding: 4px 3px !important;
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+    border-radius: 6px !important;
+    gap: 2px !important;
+  }
+
+  .mobile-card-cart-btn svg {
+    width: 11px !important;
+    height: 11px !important;
+    flex-shrink: 0;
+  }
+}

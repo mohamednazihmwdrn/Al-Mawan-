@@ -72,7 +72,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#163674] text-white shadow-lg border-b border-indigo-900/40">
+    <header className="sticky top-0 z-40 w-full max-w-[100vw] overflow-x-clip bg-[#163674] text-white shadow-lg border-b border-indigo-900/40">
       {settings.announcementNotice?.trim() && (
         <div className="bg-amber-400 text-slate-950 text-[11px] sm:text-xs font-black text-center py-1.5 px-3">
           {settings.announcementNotice}
@@ -83,7 +83,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           
           {/* Logo & Store Name */}
-          <div className="flex items-center gap-2.5 group shrink-0">
+          <div className="flex items-center gap-2.5 group md:shrink-0 mobile-header-brand">
             <div
               onClick={() => {
                 closeProductDetails();
@@ -91,7 +91,7 @@ export const Header: React.FC = () => {
                 setSelectedFilter('all');
                 setSearchQuery('');
               }}
-              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-slate-950 font-black shadow-md cursor-pointer group-hover:scale-105 transition-transform"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-slate-950 font-black shadow-md cursor-pointer group-hover:scale-105 transition-transform shrink-0"
             >
               <span className="text-xl sm:text-2xl font-black tracking-tighter">م</span>
             </div>
@@ -101,7 +101,7 @@ export const Header: React.FC = () => {
                 e.stopPropagation();
                 triggerSecretClick();
               }}
-              className="flex flex-col select-none"
+              className="flex flex-col select-none min-w-0"
             >
               <div className="flex items-center gap-1.5">
                 <span className="text-lg sm:text-xl font-black tracking-tight text-white leading-tight">
@@ -110,8 +110,8 @@ export const Header: React.FC = () => {
               </div>
 
               {/* Full store subtitle */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] sm:text-xs font-bold text-amber-400 select-none leading-tight">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[11px] sm:text-xs font-bold text-amber-400 select-none leading-tight mobile-header-subtitle">
                   {settings.storeName.split(' ').slice(1).join(' ') || 'للحدايد والبويات ولوازم المعمار'}
                 </span>
               </div>
@@ -215,8 +215,8 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Categories Horizontal Navigation Bar */}
-      <div className="bg-[#0f2858] border-t border-white/10 px-2 sm:px-4 overflow-x-auto scrollbar-none">
-        <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-2 py-2 text-xs font-semibold whitespace-nowrap min-w-max">
+      <div className="w-full max-w-full bg-[#0f2858] border-t border-white/10 px-2 sm:px-4 overflow-x-auto scrollbar-none">
+        <div className="max-w-7xl mx-auto flex items-center gap-1 sm:gap-2 py-2 text-xs font-semibold whitespace-nowrap min-w-max mobile-header-pills">
           <button
             onClick={() => handleCategoryClick(null)}
             className={`px-3 py-1.5 rounded-full transition-all ${

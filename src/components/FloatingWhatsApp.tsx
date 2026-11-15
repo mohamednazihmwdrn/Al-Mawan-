@@ -11,7 +11,7 @@ export const FloatingWhatsApp: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-5 left-5 z-40 flex items-center group">
+    <div className="fixed bottom-5 left-5 z-40 flex items-center group mobile-floating-whatsapp">
       {/* Tooltip on hover */}
       <div className="hidden md:block ml-3 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-xl border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
         تواصل فوري عبر واتساب

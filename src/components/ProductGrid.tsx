@@ -18,7 +18,8 @@ export const ProductGrid: React.FC = () => {
     searchQuery,
     setSearchQuery,
     selectedFilter,
-    setSelectedFilter
+    setSelectedFilter,
+    openProductDetails
   } = useStore();
 
   const categorySubPages = useMemo(() => {
@@ -116,9 +117,9 @@ export const ProductGrid: React.FC = () => {
   };
 
   return (
-    <section id="store-products-section" className="max-w-7xl mx-auto w-full px-3 sm:px-4 py-6 scroll-mt-24">
+    <section id="store-products-section" className="max-w-7xl mx-auto w-full px-3 sm:px-4 py-6 scroll-mt-24 mobile-products-section">
       {/* Main Page Instant Product Search & Category Filter Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-sm mb-5">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-sm mb-5 mobile-search-box">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
           {/* Search Input by Product Name */}
           <div className="relative flex-1">
@@ -355,49 +356,240 @@ export const ProductGrid: React.FC = () => {
         </div>
       )}
 
-      {/* Main Storefront: Every category with its products in horizontal scroll */}
+      {/* Main Storefront: Mobile 3-Column Bento Grid + Desktop Horizontal Scroll Rows */}
       {isHomeOverview && categories.length > 0 ? (
-        <div className="space-y-8">
-          {categorySections.map(({ category, items }) => (
-            <div key={category.id} className="space-y-3">
-              {/* Category Row Header */}
-              <div className="flex items-center justify-between gap-2 bg-white rounded-2xl border border-slate-200/80 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() => handleEnterCategory(category.id)}
-                  className="flex items-center gap-2.5 text-right group"
-                >
-                  {category.image && (
-                    <img
-                      src={category.image}
-                      alt={category.name}
-                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-slate-200 shrink-0"
-                    />
-                  )}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-sm sm:text-lg font-black text-slate-900 group-hover:text-blue-700 transition-colors">
-                      {category.name}
-                    </h2>
-                    <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                      {items.length} منتج
-                    </span>
-                  </div>
-                </button>
+        <>
+          {/* Mobile-only (@media max-width: 768px) Amazon-style 3-column Bento Grid */}
+          <div className="mobile-bento-only">
+            <div className="mobile-bento-grid">
+              {categorySections.map(({ category, items }) => {
+                const miniProducts = items.slice(0, 4);
+                const miniSubPages =
+                  miniProducts.length === 0
+                    ? subPages.filter((sp) => sp.categoryId === category.id).slice(0, 4)
+                    : [];
 
+                return (
+                  <div key={category.id} className="mobile-bento-card">
+                    {/* Single-line Header: Title (Right RTL) + Small Chevron (Left RTL) */}
+                    <button
+                      type="button"
+                      onClick={() => handleEnterCategory(category.id)}
+                      className="mobile-bento-card-header"
+                    >
+                      <span className="mobile-bento-card-title">{category.name}</span>
+                      <ChevronLeft className="mobile-bento-card-chevron" />
+                    </button>
+
+                    {/* 2x2 Mini-Grid inside each Bento Box */}
+                    {miniProducts.length > 0 ? (
+                      <div className="mobile-bento-subgrid">
+                        {miniProducts.map((product) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => openProductDetails(product)}
+                            className="mobile-bento-mini-item"
+                          >
+                            <div className="mobile-bento-thumb-wrap">
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                loading="lazy"
+                                className="mobile-bento-thumb"
+                              />
+                            </div>
+                            <span className="mobile-bento-mini-title">{product.name}</span>
+                            <span
+                              className={`mobile-bento-mini-price ${
+                                product.price > 0 ? '' : 'mobile-bento-mini-price--contact'
+                              }`}
+                            >
+                              {product.price > 0
+                                ? `${product.price.toLocaleString('en-US')} ج.م`
+                                : 'السعر عند التواصل'}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : miniSubPages.length > 0 ? (
+                      <div className="mobile-bento-subgrid">
+                        {miniSubPages.map((sp) => (
+                          <button
+                            key={sp.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategoryId(category.id);
+                              setSelectedSubPageId(sp.id);
+                              setSelectedFilter('all');
+                            }}
+                            className="mobile-bento-mini-item"
+                          >
+                            <div className="mobile-bento-thumb-wrap">
+                              <img
+                                src={sp.image || category.image}
+                                alt={sp.name}
+                                loading="lazy"
+                                className="mobile-bento-thumb"
+                              />
+                            </div>
+                            <span className="mobile-bento-mini-title">{sp.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleEnterCategory(category.id)}
+                        className="mobile-bento-mini-item flex-1 justify-center"
+                      >
+                        <div className="mobile-bento-thumb-wrap">
+                          <img
+                            src={category.image}
+                            alt={category.name}
+                            loading="lazy"
+                            className="mobile-bento-thumb"
+                          />
+                        </div>
+                        <span className="mobile-bento-mini-title text-center">تصفح القسم</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Uncategorized / General Products Bento Box if any exist */}
+              {uncategorizedProducts.length > 0 && (
+                <div className="mobile-bento-card">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategoryId(null);
+                      setSelectedFilter('all');
+                    }}
+                    className="mobile-bento-card-header"
+                  >
+                    <span className="mobile-bento-card-title">منتجات عامة</span>
+                    <ChevronLeft className="mobile-bento-card-chevron" />
+                  </button>
+                  <div className="mobile-bento-subgrid">
+                    {uncategorizedProducts.slice(0, 4).map((product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() => openProductDetails(product)}
+                        className="mobile-bento-mini-item"
+                      >
+                        <div className="mobile-bento-thumb-wrap">
+                          <img
+                            src={product.image}
+                            alt={product.name}
+                            loading="lazy"
+                            className="mobile-bento-thumb"
+                          />
+                        </div>
+                        <span className="mobile-bento-mini-title">{product.name}</span>
+                        <span
+                          className={`mobile-bento-mini-price ${
+                            product.price > 0 ? '' : 'mobile-bento-mini-price--contact'
+                          }`}
+                        >
+                          {product.price > 0
+                            ? `${product.price.toLocaleString('en-US')} ج.م`
+                            : 'السعر عند التواصل'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {hasMoreProducts && (
+              <div className="mt-4 text-center">
                 <button
                   type="button"
-                  onClick={() => handleEnterCategory(category.id)}
-                  className="text-xs sm:text-sm font-black text-[#163674] hover:text-blue-700 flex items-center gap-0.5 shrink-0 px-2.5 py-1.5 rounded-xl hover:bg-blue-50 transition-colors"
+                  onClick={loadMoreProducts}
+                  className="px-5 py-2.5 rounded-xl bg-[#163674] hover:bg-[#122854] text-white font-black text-xs shadow-md transition-all active:scale-95"
                 >
-                  <span>عرض الكل</span>
-                  <ChevronLeft className="w-4 h-4" />
+                  عرض المزيد من المنتجات والمعدات
                 </button>
               </div>
+            )}
+          </div>
 
-              {/* Horizontal Scrollable Products Row */}
-              {items.length > 0 ? (
+          {/* Desktop / Tablet (> 768px) Untouched Horizontal Scroll Layout */}
+          <div className="space-y-8 desktop-showcase-only">
+            {categorySections.map(({ category, items }) => (
+              <div key={category.id} className="space-y-3">
+                {/* Category Row Header */}
+                <div className="flex items-center justify-between gap-2 bg-white rounded-2xl border border-slate-200/80 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleEnterCategory(category.id)}
+                    className="flex items-center gap-2.5 text-right group"
+                  >
+                    {category.image && (
+                      <img
+                        src={category.image}
+                        alt={category.name}
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                      />
+                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-sm sm:text-lg font-black text-slate-900 group-hover:text-blue-700 transition-colors">
+                        {category.name}
+                      </h2>
+                      <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        {items.length} منتج
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleEnterCategory(category.id)}
+                    className="text-xs sm:text-sm font-black text-[#163674] hover:text-blue-700 flex items-center gap-0.5 shrink-0 px-2.5 py-1.5 rounded-xl hover:bg-blue-50 transition-colors"
+                  >
+                    <span>عرض الكل</span>
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Horizontal Scrollable Products Row */}
+                {items.length > 0 ? (
+                  <div className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto pb-3 px-0.5 snap-x snap-mandatory">
+                    {items.map((product) => (
+                      <div
+                        key={product.id}
+                        className="w-[176px] sm:w-[224px] lg:w-[248px] shrink-0 snap-start"
+                      >
+                        <ProductCard product={product} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-white/80 rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-center text-xs sm:text-sm text-slate-500 font-bold">
+                    لا توجد منتجات مضافة في قسم «{category.name}» حالياً
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Uncategorized / General Products Row if any exist */}
+            {uncategorizedProducts.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2 bg-white rounded-2xl border border-slate-200/80 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm sm:text-lg font-black text-slate-900">منتجات عامة</h2>
+                    <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                      {uncategorizedProducts.length} منتج
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto pb-3 px-0.5 snap-x snap-mandatory">
-                  {items.map((product) => (
+                  {uncategorizedProducts.map((product) => (
                     <div
                       key={product.id}
                       className="w-[176px] sm:w-[224px] lg:w-[248px] shrink-0 snap-start"
@@ -406,55 +598,26 @@ export const ProductGrid: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="bg-white/80 rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-center text-xs sm:text-sm text-slate-500 font-bold">
-                  لا توجد منتجات مضافة في قسم «{category.name}» حالياً
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* Uncategorized / General Products Row if any exist */}
-          {uncategorizedProducts.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2 bg-white rounded-2xl border border-slate-200/80 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm sm:text-lg font-black text-slate-900">منتجات عامة</h2>
-                  <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                    {uncategorizedProducts.length} منتج
-                  </span>
-                </div>
               </div>
+            )}
 
-              <div className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto pb-3 px-0.5 snap-x snap-mandatory">
-                {uncategorizedProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="w-[176px] sm:w-[224px] lg:w-[248px] shrink-0 snap-start"
-                  >
-                    <ProductCard product={product} />
-                  </div>
-                ))}
+            {hasMoreProducts && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={loadMoreProducts}
+                  className="px-6 py-3 rounded-2xl bg-[#163674] hover:bg-[#122854] text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95"
+                >
+                  عرض المزيد من المنتجات والمعدات
+                </button>
               </div>
-            </div>
-          )}
-
-          {hasMoreProducts && (
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={loadMoreProducts}
-                className="px-6 py-3 rounded-2xl bg-[#163674] hover:bg-[#122854] text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95"
-              >
-                عرض المزيد من المنتجات والمعدات
-              </button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </>
       ) : filteredProducts.length > 0 ? (
-        /* Category / Subpage / Search / Filter View: Full Vertical Grid showing ALL matching products */
+        /* Category / Subpage / Search / Filter View: 3-col compact on mobile, untouched grid on desktop */
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 mobile-products-grid">
             {filteredProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
