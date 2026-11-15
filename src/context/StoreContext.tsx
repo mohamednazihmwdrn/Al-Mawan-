@@ -882,7 +882,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setBanners(loaded);
           writeStoreCache('banners', loaded);
           setLastSyncedTime(Date.now());
-        } else {
+        } else if (!snap.metadata.fromCache) {
           setBanners([]);
           writeStoreCache('banners', []);
         }
@@ -910,7 +910,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setCategories(loaded);
           writeStoreCache('categories', loaded);
           setLastSyncedTime(Date.now());
-        } else {
+        } else if (!snap.metadata.fromCache) {
           setCategories([]);
           writeStoreCache('categories', []);
         }
@@ -941,7 +941,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setSubPages(loaded);
           writeStoreCache('subpages', loaded);
           setLastSyncedTime(Date.now());
-        } else {
+        } else if (!snap.metadata.fromCache) {
           setSubPages([]);
           writeStoreCache('subpages', []);
         }
@@ -969,7 +969,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setPaintCatalogs(loaded);
           writeStoreCache('paint_catalogs', loaded);
           setLastSyncedTime(Date.now());
-        } else {
+        } else if (!snap.metadata.fromCache) {
           setPaintCatalogs([]);
           writeStoreCache('paint_catalogs', []);
         }
@@ -1042,7 +1042,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
           }
           setLastSyncedTime(Date.now());
-        } else {
+        } else if (!snap.metadata.fromCache) {
           setBrands([]);
           writeStoreCache('brands', []);
         }
@@ -1071,7 +1071,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setFeatures(loaded);
           writeStoreCache('features', loaded);
           setLastSyncedTime(Date.now());
-        } else {
+        } else if (!snap.metadata.fromCache) {
           setFeatures([]);
           writeStoreCache('features', []);
         }
@@ -1104,7 +1104,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setProducts(loaded);
           writeStoreCache('products', loaded);
           setLastSyncedTime(Date.now());
-        } else {
+        } else if (!snap.metadata.fromCache) {
           setProducts([]);
           writeStoreCache('products', []);
         }
