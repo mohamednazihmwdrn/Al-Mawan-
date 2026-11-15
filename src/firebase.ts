@@ -1,36 +1,12 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import {
-  getFirestore,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  doc,
-  getDocFromServer,
-  Firestore
-} from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 
-function createFirestoreInstance(): Firestore {
-  try {
-    return initializeFirestore(
-      app,
-      {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager(),
-        }),
-      },
-      firebaseConfig.firestoreDatabaseId
-    );
-  } catch {
-    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
-  }
-}
-
 // CRITICAL: Connect to the provisioned Firestore database instance ID
-export const db = createFirestoreInstance();
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
@@ -40,17 +16,6 @@ setPersistence(auth, browserLocalPersistence).catch((err) => {
 });
 
 export const OWNER_ADMIN_EMAIL = 'mnazih298@gmail.com';
-
-export function isFirestoreQuotaError(error: unknown): boolean {
-  const msg = error instanceof Error ? error.message : String(error || '');
-  const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code) : '';
-  return (
-    msg.includes('Quota exceeded') ||
-    msg.includes('Free daily read units') ||
-    code === 'resource-exhausted' ||
-    msg.includes('resource-exhausted')
-  );
-}
 
 export enum OperationType {
   CREATE = 'create',

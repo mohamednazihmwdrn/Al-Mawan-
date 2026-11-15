@@ -37,8 +37,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   showCategories: true,
   showBrands: true,
   showContactSection: true,
-  showPaintStudio: true,
-  bannersNonClickable: true
+  showPaintStudio: true
 };
 
 export const INITIAL_BANNERS: BannerSlide[] = [];

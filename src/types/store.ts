@@ -193,7 +193,6 @@ export interface StoreSettings {
   showBrands?: boolean;
   showContactSection?: boolean;
   showPaintStudio?: boolean;
-  bannersNonClickable?: boolean;
   taxNumber?: string;
   commercialReg?: string;
   updatedAt?: string;

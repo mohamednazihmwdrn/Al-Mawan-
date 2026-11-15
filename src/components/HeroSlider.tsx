@@ -26,12 +26,10 @@ export const HeroSlider: React.FC = () => {
   const safeIndex = currentSlide < slides.length ? currentSlide : 0;
   const current = slides[safeIndex];
 
-  const globallyNonClickable = settings.bannersNonClickable !== false;
   const isBannerClickable =
-    !globallyNonClickable &&
-    (current.buttonActionType === 'whatsapp' ||
-      current.buttonActionType === 'paint_studio' ||
-      (current.buttonActionType === 'category' && Boolean(current.buttonTarget)));
+    current.buttonActionType === 'whatsapp' ||
+    current.buttonActionType === 'paint_studio' ||
+    (current.buttonActionType === 'category' && Boolean(current.buttonTarget));
 
   const handleActionClick = () => {
     if (!isBannerClickable) return;

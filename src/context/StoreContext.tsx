@@ -10,15 +10,12 @@ import {
   orderBy,
   limit,
   getDocFromServer,
-  getDocFromCache,
   getDocs,
-  getDocsFromCache,
   where,
   deleteField,
   writeBatch,
   Unsubscribe
 } from 'firebase/firestore';
-import { idbGet, idbSet } from '../utils/localBackupDb';
 import {
   Product,
   ProductReview,
@@ -48,8 +45,7 @@ import {
 import {
   db,
   OperationType,
-  handleFirestoreError,
-  isFirestoreQuotaError
+  handleFirestoreError
 } from '../firebase';
 import { sanitizeId } from '../utils/imageCompress';
 
@@ -218,26 +214,7 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 const AUTH_KEY = 'almawan_owner_session';
 const CART_KEY = 'almawan_cart_v1';
-const CACHE_PREFIX = 'almawan_cache_v1_';
 const PRODUCT_PAGE_SIZE = 60;
-
-function readStoreCache<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(`${CACHE_PREFIX}${key}`);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStoreCache<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(value));
-  } catch {
-    // ignore localStorage 5MB quota errors; IndexedDB below handles large payloads
-  }
-  void idbSet(key, value);
-}
 
 // --- Strict Sanitization Builders matching firestore.rules allowlists ---
 
@@ -274,7 +251,6 @@ function buildSettingsPayload(s: StoreSettings): Record<string, unknown> {
   if (typeof s.showBrands === 'boolean') payload.showBrands = s.showBrands;
   if (typeof s.showContactSection === 'boolean') payload.showContactSection = s.showContactSection;
   if (typeof s.showPaintStudio === 'boolean') payload.showPaintStudio = s.showPaintStudio;
-  if (typeof s.bannersNonClickable === 'boolean') payload.bannersNonClickable = s.bannersNonClickable;
   return payload;
 }
 
@@ -449,31 +425,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [secretClicks, setSecretClicks] = useState(0);
   const secretClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Core Data (Hydrated from local cache for offline/quota resilience, kept synced with Firestore)
-  const [settings, setSettings] = useState<StoreSettings>(() =>
-    readStoreCache<StoreSettings>('settings', INITIAL_SETTINGS)
-  );
-  const [products, setProducts] = useState<Product[]>(() =>
-    readStoreCache<Product[]>('products', [])
-  );
-  const [categories, setCategories] = useState<Category[]>(() =>
-    readStoreCache<Category[]>('categories', [])
-  );
-  const [subPages, setSubPages] = useState<SubPage[]>(() =>
-    readStoreCache<SubPage[]>('subpages', [])
-  );
-  const [paintCatalogs, setPaintCatalogs] = useState<PaintCatalog[]>(() =>
-    readStoreCache<PaintCatalog[]>('paint_catalogs', [])
-  );
-  const [banners, setBanners] = useState<BannerSlide[]>(() =>
-    readStoreCache<BannerSlide[]>('banners', [])
-  );
-  const [brands, setBrands] = useState<StoreBrand[]>(() =>
-    readStoreCache<StoreBrand[]>('brands', INITIAL_BRANDS)
-  );
-  const [features, setFeatures] = useState<StoreFeature[]>(() =>
-    readStoreCache<StoreFeature[]>('features', INITIAL_FEATURES)
-  );
+  // Core Data (Start empty before Firestore responds so deleted defaults never flash)
+  const [settings, setSettings] = useState<StoreSettings>(INITIAL_SETTINGS);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subPages, setSubPages] = useState<SubPage[]>([]);
+  const [paintCatalogs, setPaintCatalogs] = useState<PaintCatalog[]>([]);
+  const [banners, setBanners] = useState<BannerSlide[]>([]);
+  const [brands, setBrands] = useState<StoreBrand[]>([]);
+  const [features, setFeatures] = useState<StoreFeature[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
 
@@ -490,8 +450,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const demoCleanupAttemptedRef = useRef<boolean>(false);
   const brandsMigrationAttemptedRef = useRef<boolean>(false);
   const ilockLabelFixedRef = useRef<boolean>(false);
-  const quotaNoticeShownRef = useRef<boolean>(false);
-  const serverSyncedKeysRef = useRef<Set<string>>(new Set());
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -631,10 +589,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          console.warn('Firestore quota reached watching selected product.');
-          return;
-        }
         handleFirestoreError(err, OperationType.GET, `products/${selectedProductId}`);
       }
     );
@@ -724,14 +678,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 3400);
   }, []);
 
-  const notifyQuotaExceeded = useCallback(() => {
-    if (!quotaNoticeShownRef.current) {
-      quotaNoticeShownRef.current = true;
-      console.warn('Firestore daily free-tier read quota exceeded. Using locally cached data.');
-      showToast('تم الوصول للحد اليومي المجاني لقراءة قاعدة البيانات — يتم عرض النسخة المحفوظة مؤقتاً');
-    }
-  }, [showToast]);
-
   // Seed default store structure (settings, partner brands, features — NO dummy products/banners/categories)
   const seedCloudDefaults = useCallback(
     async (force = false) => {
@@ -785,6 +731,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     },
     [showToast]
   );
+
+  // Auto-seed store settings & partner brands once if settings/store is missing
+  useEffect(() => {
+    if (autoSeedAttemptedRef.current) return;
+    autoSeedAttemptedRef.current = true;
+    seedCloudDefaults(false).catch(() => {});
+  }, [seedCloudDefaults]);
 
   // One-time automatic cleanup of ALL legacy dummy products, dummy banners, and dummy categories
   useEffect(() => {
@@ -841,53 +794,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     cleanLegacy();
   }, [products, banners, categories, subPages, productsLoaded, categoriesLoaded, subPagesLoaded]);
 
-  // Hydrate large collections from IndexedDB backup on boot (if server hasn't synced yet)
-  useEffect(() => {
-    let cancelled = false;
-    const hydrateFromIdb = async () => {
-      const [idbSettings, idbBanners, idbCategories, idbSubPages, idbCatalogs, idbBrands, idbFeatures, idbProducts] =
-        await Promise.all([
-          idbGet<StoreSettings>('settings'),
-          idbGet<BannerSlide[]>('banners'),
-          idbGet<Category[]>('categories'),
-          idbGet<SubPage[]>('subpages'),
-          idbGet<PaintCatalog[]>('paint_catalogs'),
-          idbGet<StoreBrand[]>('brands'),
-          idbGet<StoreFeature[]>('features'),
-          idbGet<Product[]>('products')
-        ]);
-      if (cancelled) return;
-      if (idbSettings && !serverSyncedKeysRef.current.has('settings')) {
-        setSettings({ ...INITIAL_SETTINGS, ...idbSettings });
-      }
-      if (idbBanners && idbBanners.length > 0 && !serverSyncedKeysRef.current.has('banners')) {
-        setBanners((prev) => (prev.length > 0 ? prev : idbBanners));
-      }
-      if (idbCategories && idbCategories.length > 0 && !serverSyncedKeysRef.current.has('categories')) {
-        setCategories((prev) => (prev.length > 0 ? prev : idbCategories));
-      }
-      if (idbSubPages && idbSubPages.length > 0 && !serverSyncedKeysRef.current.has('subpages')) {
-        setSubPages((prev) => (prev.length > 0 ? prev : idbSubPages));
-      }
-      if (idbCatalogs && idbCatalogs.length > 0 && !serverSyncedKeysRef.current.has('paint_catalogs')) {
-        setPaintCatalogs((prev) => (prev.length > 0 ? prev : idbCatalogs));
-      }
-      if (idbBrands && idbBrands.length > 0 && !serverSyncedKeysRef.current.has('brands')) {
-        setBrands(idbBrands);
-      }
-      if (idbFeatures && idbFeatures.length > 0 && !serverSyncedKeysRef.current.has('features')) {
-        setFeatures(idbFeatures);
-      }
-      if (idbProducts && idbProducts.length > 0 && !serverSyncedKeysRef.current.has('products')) {
-        setProducts((prev) => (prev.length > 0 ? prev : idbProducts));
-      }
-    };
-    void hydrateFromIdb();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // --- Real-Time Firestore Listeners ---
 
   // 1. Settings listener
@@ -897,39 +803,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       settingsRef,
       (snap) => {
         if (snap.exists()) {
-          serverSyncedKeysRef.current.add('settings');
-          const nextSettings = { ...INITIAL_SETTINGS, ...(snap.data() as Partial<StoreSettings>) };
           setIsCloudSeeded(true);
-          setSettings(nextSettings);
-          writeStoreCache('settings', nextSettings);
+          setSettings({ ...INITIAL_SETTINGS, ...(snap.data() as Partial<StoreSettings>) });
           setLastSyncedTime(Date.now());
         } else {
           setIsCloudSeeded(false);
-          if (!autoSeedAttemptedRef.current && !snap.metadata.fromCache) {
-            autoSeedAttemptedRef.current = true;
-            seedCloudDefaults(false).catch(() => {});
-          }
         }
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          getDocFromCache(settingsRef)
-            .then((cached) => {
-              if (cached.exists()) {
-                const nextSettings = { ...INITIAL_SETTINGS, ...(cached.data() as Partial<StoreSettings>) };
-                setSettings(nextSettings);
-                writeStoreCache('settings', nextSettings);
-              }
-            })
-            .catch(() => {});
-          return;
-        }
         handleFirestoreError(err, OperationType.GET, 'settings/store');
       }
     );
     return () => unsub();
-  }, [notifyQuotaExceeded, seedCloudDefaults]);
+  }, []);
 
   // 2. Banners listener
   useEffect(() => {
@@ -938,40 +824,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       q,
       (snap) => {
         if (!snap.empty) {
-          serverSyncedKeysRef.current.add('banners');
           const loaded = snap.docs
             .map((d) => ({ ...(d.data() as BannerSlide), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
           setBanners(loaded);
-          writeStoreCache('banners', loaded);
           setLastSyncedTime(Date.now());
-        } else if (!snap.metadata.fromCache) {
-          serverSyncedKeysRef.current.add('banners');
+        } else {
           setBanners([]);
-          writeStoreCache('banners', []);
         }
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          getDocsFromCache(q)
-            .then((cached) => {
-              if (!cached.empty) {
-                const loaded = cached.docs
-                  .map((d) => ({ ...(d.data() as BannerSlide), id: d.id }))
-                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-                setBanners(loaded);
-                writeStoreCache('banners', loaded);
-              }
-            })
-            .catch(() => {});
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'banners');
       }
     );
     return () => unsub();
-  }, [notifyQuotaExceeded]);
+  }, []);
 
   // 3. Categories listener
   useEffect(() => {
@@ -981,37 +848,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (snap) => {
         setCategoriesLoaded(true);
         if (!snap.empty) {
-          serverSyncedKeysRef.current.add('categories');
           const loaded = snap.docs.map((d) => ({ ...(d.data() as Category), id: d.id }));
           setCategories(loaded);
-          writeStoreCache('categories', loaded);
           setLastSyncedTime(Date.now());
-        } else if (!snap.metadata.fromCache) {
-          serverSyncedKeysRef.current.add('categories');
+        } else {
           setCategories([]);
-          writeStoreCache('categories', []);
         }
       },
       (err) => {
-        setCategoriesLoaded(true);
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          getDocsFromCache(q)
-            .then((cached) => {
-              if (!cached.empty) {
-                const loaded = cached.docs.map((d) => ({ ...(d.data() as Category), id: d.id }));
-                setCategories(loaded);
-                writeStoreCache('categories', loaded);
-              }
-            })
-            .catch(() => {});
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'categories');
       }
     );
     return () => unsub();
-  }, [notifyQuotaExceeded]);
+  }, []);
 
   // 3A-sub. SubPages listener
   useEffect(() => {
@@ -1021,41 +870,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       (snap) => {
         setSubPagesLoaded(true);
         if (!snap.empty) {
-          serverSyncedKeysRef.current.add('subpages');
           const loaded = snap.docs
             .map((d) => ({ ...(d.data() as SubPage), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
           setSubPages(loaded);
-          writeStoreCache('subpages', loaded);
           setLastSyncedTime(Date.now());
-        } else if (!snap.metadata.fromCache) {
-          serverSyncedKeysRef.current.add('subpages');
+        } else {
           setSubPages([]);
-          writeStoreCache('subpages', []);
         }
       },
       (err) => {
-        setSubPagesLoaded(true);
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          getDocsFromCache(q)
-            .then((cached) => {
-              if (!cached.empty) {
-                const loaded = cached.docs
-                  .map((d) => ({ ...(d.data() as SubPage), id: d.id }))
-                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-                setSubPages(loaded);
-                writeStoreCache('subpages', loaded);
-              }
-            })
-            .catch(() => {});
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'subpages');
       }
     );
     return () => unsub();
-  }, [notifyQuotaExceeded]);
+  }, []);
 
   // 3A-paint. Paint Color Catalogs listener (PDFs & Images)
   useEffect(() => {
@@ -1064,36 +893,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       q,
       (snap) => {
         if (!snap.empty) {
-          serverSyncedKeysRef.current.add('paint_catalogs');
           const loaded = snap.docs.map((d) => ({ ...(d.data() as PaintCatalog), id: d.id }));
           setPaintCatalogs(loaded);
-          writeStoreCache('paint_catalogs', loaded);
           setLastSyncedTime(Date.now());
-        } else if (!snap.metadata.fromCache) {
-          serverSyncedKeysRef.current.add('paint_catalogs');
+        } else {
           setPaintCatalogs([]);
-          writeStoreCache('paint_catalogs', []);
         }
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          getDocsFromCache(q)
-            .then((cached) => {
-              if (!cached.empty) {
-                const loaded = cached.docs.map((d) => ({ ...(d.data() as PaintCatalog), id: d.id }));
-                setPaintCatalogs(loaded);
-                writeStoreCache('paint_catalogs', loaded);
-              }
-            })
-            .catch(() => {});
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'paint_catalogs');
       }
     );
     return () => unsub();
-  }, [notifyQuotaExceeded]);
+  }, []);
 
   // 3B. Partner Brands listener + One-time upgrade from legacy text-only brands to the 13 logo brands
   useEffect(() => {
@@ -1102,7 +914,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       q,
       (snap) => {
         if (!snap.empty) {
-          serverSyncedKeysRef.current.add('brands');
           const loaded = snap.docs
             .map((d) => ({ ...(d.data() as StoreBrand), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
@@ -1132,7 +943,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             };
             migrateBrands();
             setBrands(INITIAL_BRANDS);
-            writeStoreCache('brands', INITIAL_BRANDS);
           } else {
             const ilockDoc = loaded.find((b) => b.id === 'brand-ilock');
             if (ilockDoc && (ilockDoc.label.includes('أقفال') || ilockDoc.label.includes('كوالين'))) {
@@ -1140,7 +950,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 b.id === 'brand-ilock' ? { ...b, label: 'آي لوك لأدوات الكهرباء' } : b
               );
               setBrands(corrected);
-              writeStoreCache('brands', corrected);
               if (!ilockLabelFixedRef.current) {
                 ilockLabelFixedRef.current = true;
                 updateDoc(doc(db, 'brands', 'brand-ilock'), {
@@ -1149,26 +958,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               }
             } else {
               setBrands(loaded);
-              writeStoreCache('brands', loaded);
             }
           }
           setLastSyncedTime(Date.now());
-        } else if (!snap.metadata.fromCache) {
-          serverSyncedKeysRef.current.add('brands');
+        } else {
           setBrands([]);
-          writeStoreCache('brands', []);
         }
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'brands');
       }
     );
     return () => unsub();
-  }, [notifyQuotaExceeded]);
+  }, []);
 
   // 3C. Store Features listener
   useEffect(() => {
@@ -1177,29 +979,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       q,
       (snap) => {
         if (!snap.empty) {
-          serverSyncedKeysRef.current.add('features');
           const loaded = snap.docs
             .map((d) => ({ ...(d.data() as StoreFeature), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
           setFeatures(loaded);
-          writeStoreCache('features', loaded);
           setLastSyncedTime(Date.now());
-        } else if (!snap.metadata.fromCache) {
-          serverSyncedKeysRef.current.add('features');
+        } else {
           setFeatures([]);
-          writeStoreCache('features', []);
         }
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'features');
       }
     );
     return () => unsub();
-  }, [notifyQuotaExceeded]);
+  }, []);
 
   // 4. Products listener
   useEffect(() => {
@@ -1214,37 +1008,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setProductsLoaded(true);
         setCloudProductCount(snap.size);
         if (!snap.empty) {
-          serverSyncedKeysRef.current.add('products');
           const loaded = snap.docs.map((d) => ({ ...(d.data() as Product), id: d.id }));
           setProducts(loaded);
-          writeStoreCache('products', loaded);
           setLastSyncedTime(Date.now());
-        } else if (!snap.metadata.fromCache) {
-          serverSyncedKeysRef.current.add('products');
+        } else {
           setProducts([]);
-          writeStoreCache('products', []);
         }
       },
       (err) => {
-        setProductsLoaded(true);
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          getDocsFromCache(q)
-            .then((cached) => {
-              if (!cached.empty) {
-                const loaded = cached.docs.map((d) => ({ ...(d.data() as Product), id: d.id }));
-                setProducts(loaded);
-                writeStoreCache('products', loaded);
-              }
-            })
-            .catch(() => {});
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'products');
       }
     );
     return () => unsub();
-  }, [productLimit, notifyQuotaExceeded]);
+  }, [productLimit]);
 
   const loadMoreProducts = () => {
     setProductLimit((prev) => prev + PRODUCT_PAGE_SIZE);
@@ -1267,15 +1043,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setOrders(loaded);
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'orders');
       }
     );
     return () => unsub();
-  }, [isOwnerAuthenticated, notifyQuotaExceeded]);
+  }, [isOwnerAuthenticated]);
 
   // 6. Inquiries listener
   useEffect(() => {
@@ -1292,15 +1064,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setInquiries(loaded);
       },
       (err) => {
-        if (isFirestoreQuotaError(err)) {
-          notifyQuotaExceeded();
-          return;
-        }
         handleFirestoreError(err, OperationType.LIST, 'inquiries');
       }
     );
     return () => unsub();
-  }, [isOwnerAuthenticated, notifyQuotaExceeded]);
+  }, [isOwnerAuthenticated]);
 
   // --- Secret 10-Click Trigger & Owner Auth ---
 
@@ -1355,21 +1123,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newBanner: BannerSlide = { ...bannerData, id, sortOrder: banners.length };
     try {
       await setDoc(doc(db, 'banners', id), buildBannerPayload(newBanner, banners.length));
-      setBanners((prev) => {
-        const next = [...prev.filter((b) => b.id !== id), newBanner].sort(
-          (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-        );
-        writeStoreCache('banners', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تمت إضافة البنر ومزامنته لحظياً مع جميع العملاء');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حفظ البنر على السحابة لانتهاء حصة القراءة/الكتابة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حفظ البنر في قاعدة البيانات');
       handleFirestoreError(err, OperationType.CREATE, `banners/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1387,21 +1143,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: BannerSlide = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'banners', id), buildBannerPayload(merged));
-      setBanners((prev) => {
-        const next = prev
-          .map((b) => (b.id === id ? merged : b))
-          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        writeStoreCache('banners', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم تحديث بيانات البنر حياً للجميع');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر تحديث البنر لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر تحديث البنر في قاعدة البيانات');
       handleFirestoreError(err, OperationType.UPDATE, `banners/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1413,19 +1157,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'banners', id));
-      setBanners((prev) => {
-        const next = prev.filter((b) => b.id !== id);
-        writeStoreCache('banners', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم حذف البنر من الواجهة');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف البنر لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حذف البنر من قاعدة البيانات');
       handleFirestoreError(err, OperationType.DELETE, `banners/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1454,20 +1188,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     try {
       await setDoc(doc(db, 'products', id), buildProductPayload(newProduct));
-      setProducts((prev) => {
-        const next = [newProduct, ...prev.filter((p) => p.id !== id)];
-        writeStoreCache('products', next);
-        return next;
-      });
-      setProductsLoaded(true);
       setLastSyncedTime(now);
       showToast('تم نشر المنتج ومزامنته لحظياً على أجهزة كافة العملاء');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر نشر المنتج لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر نشر المنتج في قاعدة البيانات');
       handleFirestoreError(err, OperationType.CREATE, `products/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1485,19 +1208,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: Product = { ...current, ...updated, id, updatedAt: Date.now() };
     try {
       await setDoc(doc(db, 'products', id), buildProductPayload(merged));
-      setProducts((prev) => {
-        const next = prev.map((p) => (p.id === id ? merged : p));
-        writeStoreCache('products', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم تحديث بيانات المنتج حياً');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر تحديث المنتج لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر تحديث المنتج في قاعدة البيانات');
       handleFirestoreError(err, OperationType.UPDATE, `products/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1509,19 +1222,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'products', id));
-      setProducts((prev) => {
-        const next = prev.filter((p) => p.id !== id);
-        writeStoreCache('products', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم حذف المنتج وتحديث الكتالوج');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف المنتج لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حذف المنتج من قاعدة البيانات');
       handleFirestoreError(err, OperationType.DELETE, `products/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1534,8 +1237,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const snap = await getDocs(collection(db, 'products'));
       if (snap.empty) {
-        setProducts([]);
-        writeStoreCache('products', []);
         showToast('المتجر نظيف بالفعل ولا يحتوي على أي منتجات.');
         setIsSyncing(false);
         return;
@@ -1546,16 +1247,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
         await batch.commit();
       }
-      setProducts([]);
-      writeStoreCache('products', []);
       setLastSyncedTime(Date.now());
       showToast(`تم حذف جميع المنتجات (${docs.length}) بنجاح وتنظيف المتجر بالكامل.`);
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف المنتجات لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر مسح المنتجات من قاعدة البيانات');
       handleFirestoreError(err, OperationType.DELETE, 'products/clear-all');
     } finally {
       setIsSyncing(false);
@@ -1588,10 +1282,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           onReviews(list);
         },
         (err) => {
-          if (isFirestoreQuotaError(err)) {
-            onReviews([]);
-            return;
-          }
           handleFirestoreError(err, OperationType.LIST, path);
         }
       );
@@ -1620,10 +1310,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await setDoc(doc(db, `products/${safeProdId}/reviews`, reviewId), payload);
       showToast('شكراً لك! تم نشر تقييمك وتعليقك بنجاح.');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر إرسال التقييم حالياً بسبب وصول قاعدة البيانات للحد اليومي.');
-        throw err;
-      }
       handleFirestoreError(err, OperationType.CREATE, path);
     }
   };
@@ -1637,10 +1323,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await deleteDoc(doc(db, `products/${safeProdId}/reviews`, safeRevId));
       showToast('تم حذف التقييم بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف التقييم لانتهاء الحصة اليومية.');
-        throw err;
-      }
       handleFirestoreError(err, OperationType.DELETE, path);
     }
   };
@@ -1654,20 +1336,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newCat: Category = { ...catData, id };
     try {
       await setDoc(doc(db, 'categories', id), buildCategoryPayload(newCat));
-      setCategories((prev) => {
-        const next = [...prev.filter((c) => c.id !== id), newCat];
-        writeStoreCache('categories', next);
-        return next;
-      });
-      setCategoriesLoaded(true);
       setLastSyncedTime(Date.now());
       showToast('تم إضافة القسم الجديد ومزامنته للجميع');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر إنشاء القسم لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حفظ القسم في قاعدة البيانات (تأكد من كتابة حرفين على الأقل)');
       handleFirestoreError(err, OperationType.CREATE, `categories/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1685,49 +1356,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: Category = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'categories', id), buildCategoryPayload(merged));
-      setCategories((prev) => {
-        const next = prev.map((c) => (c.id === id ? merged : c));
-        writeStoreCache('categories', next);
-        return next;
-      });
       if (merged.name.trim() !== current.name.trim()) {
-        const nextCatName = merged.name.trim().slice(0, 120) || 'عام';
-        setProducts((prev) => {
-          const next = prev.map((p) =>
-            p.categoryId === id ? { ...p, categoryName: nextCatName, updatedAt: Date.now() } : p
-          );
-          writeStoreCache('products', next);
-          return next;
-        });
-        try {
-          const prodSnap = await getDocs(
-            query(collection(db, 'products'), where('categoryId', '==', id))
-          );
-          if (!prodSnap.empty) {
-            const docs = prodSnap.docs;
-            for (let i = 0; i < docs.length; i += 400) {
-              const batch = writeBatch(db);
-              docs.slice(i, i + 400).forEach((d) => {
-                batch.update(d.ref, {
-                  categoryName: nextCatName,
-                  updatedAt: Date.now()
-                });
+        const prodSnap = await getDocs(
+          query(collection(db, 'products'), where('categoryId', '==', id))
+        );
+        if (!prodSnap.empty) {
+          const nextCatName = merged.name.trim().slice(0, 120) || 'عام';
+          const docs = prodSnap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(db);
+            docs.slice(i, i + 400).forEach((d) => {
+              batch.update(d.ref, {
+                categoryName: nextCatName,
+                updatedAt: Date.now()
               });
-              await batch.commit();
-            }
+            });
+            await batch.commit();
           }
-        } catch (cascadeErr) {
-          console.warn('Category cascade update notice:', cascadeErr);
         }
       }
       setLastSyncedTime(Date.now());
       showToast('تم تحديث بيانات القسم بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر تحديث القسم لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر تحديث القسم في قاعدة البيانات');
       handleFirestoreError(err, OperationType.UPDATE, `categories/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1739,67 +1389,37 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'categories', id));
-      setCategories((prev) => {
-        const next = prev.filter((c) => c.id !== id);
-        writeStoreCache('categories', next);
-        return next;
-      });
-      setSubPages((prev) => {
-        const next = prev.filter((sp) => sp.categoryId !== id);
-        writeStoreCache('subpages', next);
-        return next;
-      });
-      setProducts((prev) => {
-        const next = prev.map((p) =>
-          p.categoryId === id
-            ? {
-                ...p,
-                categoryId: 'general',
-                categoryName: 'عام',
-                subPageId: undefined,
-                subPageName: undefined,
-                updatedAt: Date.now()
-              }
-            : p
-        );
-        writeStoreCache('products', next);
-        return next;
-      });
 
-      try {
-        const subSnap = await getDocs(
-          query(collection(db, 'subpages'), where('categoryId', '==', id))
-        );
-        if (!subSnap.empty) {
-          const docs = subSnap.docs;
-          for (let i = 0; i < docs.length; i += 400) {
-            const batch = writeBatch(db);
-            docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
-            await batch.commit();
-          }
+      const subSnap = await getDocs(
+        query(collection(db, 'subpages'), where('categoryId', '==', id))
+      );
+      if (!subSnap.empty) {
+        const docs = subSnap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+          await batch.commit();
         }
+      }
 
-        const prodSnap = await getDocs(
-          query(collection(db, 'products'), where('categoryId', '==', id))
-        );
-        if (!prodSnap.empty) {
-          const docs = prodSnap.docs;
-          for (let i = 0; i < docs.length; i += 400) {
-            const batch = writeBatch(db);
-            docs.slice(i, i + 400).forEach((d) => {
-              batch.update(d.ref, {
-                categoryId: 'general',
-                categoryName: 'عام',
-                subPageId: deleteField(),
-                subPageName: deleteField(),
-                updatedAt: Date.now()
-              });
+      const prodSnap = await getDocs(
+        query(collection(db, 'products'), where('categoryId', '==', id))
+      );
+      if (!prodSnap.empty) {
+        const docs = prodSnap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + 400).forEach((d) => {
+            batch.update(d.ref, {
+              categoryId: 'general',
+              categoryName: 'عام',
+              subPageId: deleteField(),
+              subPageName: deleteField(),
+              updatedAt: Date.now()
             });
-            await batch.commit();
-          }
+          });
+          await batch.commit();
         }
-      } catch (cascadeErr) {
-        console.warn('Category cascade delete notice:', cascadeErr);
       }
 
       if (selectedCategoryId === id) {
@@ -1808,11 +1428,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setLastSyncedTime(Date.now());
       showToast('تم حذف القسم وصفحاته الفرعية');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف القسم لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حذف القسم من قاعدة البيانات');
       handleFirestoreError(err, OperationType.DELETE, `categories/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1829,22 +1444,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newSp: SubPage = { ...spData, id, sortOrder: spData.sortOrder ?? catCount };
     try {
       await setDoc(doc(db, 'subpages', id), buildSubPagePayload(newSp, catCount));
-      setSubPages((prev) => {
-        const next = [...prev.filter((s) => s.id !== id), newSp].sort(
-          (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-        );
-        writeStoreCache('subpages', next);
-        return next;
-      });
-      setSubPagesLoaded(true);
       setLastSyncedTime(Date.now());
       showToast('تم إضافة الصفحة الفرعية داخل القسم بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حفظ الصفحة الفرعية لأن حصة القراءة اليومية في Firebase ممتلئة (التحقق من القسم يتطلب قراءة).');
-        throw err;
-      }
-      showToast('تعذر حفظ الصفحة الفرعية في قاعدة البيانات');
       handleFirestoreError(err, OperationType.CREATE, `subpages/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1862,67 +1464,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: SubPage = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'subpages', id), buildSubPagePayload(merged));
-      setSubPages((prev) => {
-        const next = prev
-          .map((sp) => (sp.id === id ? merged : sp))
-          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        writeStoreCache('subpages', next);
-        return next;
-      });
       if (merged.name.trim() !== current.name.trim() || merged.categoryId !== current.categoryId) {
-        const nextCat = categories.find((c) => c.id === merged.categoryId);
-        const nextSpName = merged.name.trim().slice(0, 120);
-        setProducts((prev) => {
-          const next = prev.map((p) => {
-            if (p.subPageId !== id) return p;
-            return {
-              ...p,
-              subPageName: nextSpName,
-              categoryId: merged.categoryId !== current.categoryId ? sanitizeId(merged.categoryId) : p.categoryId,
-              categoryName:
-                merged.categoryId !== current.categoryId
-                  ? String(nextCat?.name || 'عام').trim().slice(0, 120)
-                  : p.categoryName,
-              updatedAt: Date.now()
-            };
-          });
-          writeStoreCache('products', next);
-          return next;
-        });
-        try {
-          const prodSnap = await getDocs(
-            query(collection(db, 'products'), where('subPageId', '==', id))
-          );
-          if (!prodSnap.empty) {
-            const docs = prodSnap.docs;
-            for (let i = 0; i < docs.length; i += 400) {
-              const batch = writeBatch(db);
-              docs.slice(i, i + 400).forEach((d) => {
-                const patch: Record<string, unknown> = {
-                  subPageName: nextSpName,
-                  updatedAt: Date.now()
-                };
-                if (merged.categoryId !== current.categoryId) {
-                  patch.categoryId = sanitizeId(merged.categoryId);
-                  patch.categoryName = String(nextCat?.name || 'عام').trim().slice(0, 120);
-                }
-                batch.update(d.ref, patch);
-              });
-              await batch.commit();
-            }
+        const prodSnap = await getDocs(
+          query(collection(db, 'products'), where('subPageId', '==', id))
+        );
+        if (!prodSnap.empty) {
+          const nextCat = categories.find((c) => c.id === merged.categoryId);
+          const nextSpName = merged.name.trim().slice(0, 120);
+          const docs = prodSnap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(db);
+            docs.slice(i, i + 400).forEach((d) => {
+              const patch: Record<string, unknown> = {
+                subPageName: nextSpName,
+                updatedAt: Date.now()
+              };
+              if (merged.categoryId !== current.categoryId) {
+                patch.categoryId = sanitizeId(merged.categoryId);
+                patch.categoryName = String(nextCat?.name || 'عام').trim().slice(0, 120);
+              }
+              batch.update(d.ref, patch);
+            });
+            await batch.commit();
           }
-        } catch (cascadeErr) {
-          console.warn('SubPage cascade update notice:', cascadeErr);
         }
       }
       setLastSyncedTime(Date.now());
       showToast('تم تحديث الصفحة الفرعية بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر تحديث الصفحة الفرعية لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر تحديث الصفحة الفرعية');
       handleFirestoreError(err, OperationType.UPDATE, `subpages/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1934,40 +1503,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'subpages', id));
-      setSubPages((prev) => {
-        const next = prev.filter((sp) => sp.id !== id);
-        writeStoreCache('subpages', next);
-        return next;
-      });
-      setProducts((prev) => {
-        const next = prev.map((p) =>
-          p.subPageId === id
-            ? { ...p, subPageId: undefined, subPageName: undefined, updatedAt: Date.now() }
-            : p
-        );
-        writeStoreCache('products', next);
-        return next;
-      });
-      try {
-        const prodSnap = await getDocs(
-          query(collection(db, 'products'), where('subPageId', '==', id))
-        );
-        if (!prodSnap.empty) {
-          const docs = prodSnap.docs;
-          for (let i = 0; i < docs.length; i += 400) {
-            const batch = writeBatch(db);
-            docs.slice(i, i + 400).forEach((d) => {
-              batch.update(d.ref, {
-                subPageId: deleteField(),
-                subPageName: deleteField(),
-                updatedAt: Date.now()
-              });
+      const prodSnap = await getDocs(
+        query(collection(db, 'products'), where('subPageId', '==', id))
+      );
+      if (!prodSnap.empty) {
+        const docs = prodSnap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + 400).forEach((d) => {
+            batch.update(d.ref, {
+              subPageId: deleteField(),
+              subPageName: deleteField(),
+              updatedAt: Date.now()
             });
-            await batch.commit();
-          }
+          });
+          await batch.commit();
         }
-      } catch (cascadeErr) {
-        console.warn('SubPage cascade delete notice:', cascadeErr);
       }
       if (selectedSubPageId === id) {
         setSelectedSubPageId(null);
@@ -1975,11 +1526,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setLastSyncedTime(Date.now());
       showToast('تم حذف الصفحة الفرعية');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف الصفحة الفرعية لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حذف الصفحة الفرعية');
       handleFirestoreError(err, OperationType.DELETE, `subpages/${id}`);
     } finally {
       setIsSyncing(false);
@@ -1999,19 +1545,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     try {
       await setDoc(doc(db, 'paint_catalogs', id), buildPaintCatalogPayload(newCatalog));
-      setPaintCatalogs((prev) => {
-        const next = [newCatalog, ...prev.filter((c) => c.id !== id)];
-        writeStoreCache('paint_catalogs', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم رفع وإضافة كتالوج الألوان بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حفظ الكتالوج لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حفظ كتالوج الألوان');
       handleFirestoreError(err, OperationType.CREATE, `paint_catalogs/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2029,19 +1565,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: PaintCatalog = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'paint_catalogs', id), buildPaintCatalogPayload(merged));
-      setPaintCatalogs((prev) => {
-        const next = prev.map((c) => (c.id === id ? merged : c));
-        writeStoreCache('paint_catalogs', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم تحديث كتالوج الألوان بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر تحديث الكتالوج لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر تحديث كتالوج الألوان');
       handleFirestoreError(err, OperationType.UPDATE, `paint_catalogs/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2053,19 +1579,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'paint_catalogs', id));
-      setPaintCatalogs((prev) => {
-        const next = prev.filter((c) => c.id !== id);
-        writeStoreCache('paint_catalogs', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم حذف كتالوج الألوان');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف الكتالوج لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حذف كتالوج الألوان');
       handleFirestoreError(err, OperationType.DELETE, `paint_catalogs/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2081,21 +1597,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newBrand: StoreBrand = { ...brandData, id, sortOrder: brands.length };
     try {
       await setDoc(doc(db, 'brands', id), buildBrandPayload(newBrand, brands.length));
-      setBrands((prev) => {
-        const next = [...prev.filter((b) => b.id !== id), newBrand].sort(
-          (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-        );
-        writeStoreCache('brands', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تمت إضافة العلامة التجارية ومزامنتها');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر إضافة العلامة التجارية لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر إضافة العلامة التجارية');
       handleFirestoreError(err, OperationType.CREATE, `brands/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2113,51 +1617,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: StoreBrand = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'brands', id), buildBrandPayload(merged));
-      setBrands((prev) => {
-        const next = prev
-          .map((b) => (b.id === id ? merged : b))
-          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        writeStoreCache('brands', next);
-        return next;
-      });
       if (merged.name.trim() !== current.name.trim()) {
-        const nextBrandName = merged.name.trim().slice(0, 100) || 'الموان';
-        setProducts((prev) => {
-          const next = prev.map((p) =>
-            p.brand === current.name ? { ...p, brand: nextBrandName, updatedAt: Date.now() } : p
-          );
-          writeStoreCache('products', next);
-          return next;
-        });
-        try {
-          const prodSnap = await getDocs(
-            query(collection(db, 'products'), where('brand', '==', current.name))
-          );
-          if (!prodSnap.empty) {
-            const docs = prodSnap.docs;
-            for (let i = 0; i < docs.length; i += 400) {
-              const batch = writeBatch(db);
-              docs.slice(i, i + 400).forEach((d) => {
-                batch.update(d.ref, {
-                  brand: nextBrandName,
-                  updatedAt: Date.now()
-                });
+        const prodSnap = await getDocs(
+          query(collection(db, 'products'), where('brand', '==', current.name))
+        );
+        if (!prodSnap.empty) {
+          const nextBrandName = merged.name.trim().slice(0, 100) || 'الموان';
+          const docs = prodSnap.docs;
+          for (let i = 0; i < docs.length; i += 400) {
+            const batch = writeBatch(db);
+            docs.slice(i, i + 400).forEach((d) => {
+              batch.update(d.ref, {
+                brand: nextBrandName,
+                updatedAt: Date.now()
               });
-              await batch.commit();
-            }
+            });
+            await batch.commit();
           }
-        } catch (cascadeErr) {
-          console.warn('Brand cascade update notice:', cascadeErr);
         }
       }
       setLastSyncedTime(Date.now());
       showToast('تم تحديث العلامة التجارية بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر تحديث العلامة التجارية لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر تحديث العلامة التجارية');
       handleFirestoreError(err, OperationType.UPDATE, `brands/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2169,19 +1650,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'brands', id));
-      setBrands((prev) => {
-        const next = prev.filter((b) => b.id !== id);
-        writeStoreCache('brands', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم حذف العلامة التجارية');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف العلامة التجارية لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حذف العلامة التجارية');
       handleFirestoreError(err, OperationType.DELETE, `brands/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2197,21 +1668,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newFeat: StoreFeature = { ...featData, id, sortOrder: features.length };
     try {
       await setDoc(doc(db, 'features', id), buildFeaturePayload(newFeat, features.length));
-      setFeatures((prev) => {
-        const next = [...prev.filter((f) => f.id !== id), newFeat].sort(
-          (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-        );
-        writeStoreCache('features', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تمت إضافة الميزة ومزامنتها');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر إضافة الميزة لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر إضافة الميزة');
       handleFirestoreError(err, OperationType.CREATE, `features/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2229,21 +1688,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: StoreFeature = { ...current, ...updated, id };
     try {
       await setDoc(doc(db, 'features', id), buildFeaturePayload(merged));
-      setFeatures((prev) => {
-        const next = prev
-          .map((f) => (f.id === id ? merged : f))
-          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        writeStoreCache('features', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم تحديث الميزة بنجاح');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر تحديث الميزة لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر تحديث الميزة');
       handleFirestoreError(err, OperationType.UPDATE, `features/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2255,19 +1702,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSyncing(true);
     try {
       await deleteDoc(doc(db, 'features', id));
-      setFeatures((prev) => {
-        const next = prev.filter((f) => f.id !== id);
-        writeStoreCache('features', next);
-        return next;
-      });
       setLastSyncedTime(Date.now());
       showToast('تم حذف الميزة');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حذف الميزة لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حذف الميزة');
       handleFirestoreError(err, OperationType.DELETE, `features/${id}`);
     } finally {
       setIsSyncing(false);
@@ -2282,16 +1719,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const merged: StoreSettings = { ...settings, ...newSettings };
     try {
       await setDoc(doc(db, 'settings', 'store'), buildSettingsPayload(merged));
-      setSettings(merged);
-      writeStoreCache('settings', merged);
       setLastSyncedTime(Date.now());
       showToast('تم حفظ إعدادات المحل ومزامنتها لحظياً');
     } catch (err) {
-      if (isFirestoreQuotaError(err)) {
-        showToast('تعذر حفظ الإعدادات لانتهاء الحصة اليومية في Firebase.');
-        throw err;
-      }
-      showToast('تعذر حفظ إعدادات المحل');
       handleFirestoreError(err, OperationType.UPDATE, 'settings/store');
     } finally {
       setIsSyncing(false);
