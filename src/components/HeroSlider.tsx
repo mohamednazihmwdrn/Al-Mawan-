@@ -42,13 +42,13 @@ export const HeroSlider: React.FC = () => {
   return (
     <div className="relative bg-[#0d2149] text-white overflow-hidden border-b border-indigo-950/40 select-none">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-5 relative z-10">
-        <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-[#081530]">
+        <div className="relative w-full aspect-square sm:aspect-auto sm:h-[460px] md:h-[520px] lg:h-[560px] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/10 bg-[#081530]">
           <img
             key={current.id}
             src={current.image}
             alt={current.title || settings.storeName}
             onClick={handleActionClick}
-            className="w-full h-auto max-h-[580px] object-contain mx-auto block cursor-pointer animate-in fade-in"
+            className="w-full h-full object-fill block cursor-pointer animate-in fade-in"
           />
 
           {slides.length > 1 && (
