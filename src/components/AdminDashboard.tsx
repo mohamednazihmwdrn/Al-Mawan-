@@ -1168,6 +1168,21 @@ export const AdminDashboard: React.FC = () => {
               </button>
             </div>
 
+            {settings.bannersNonClickable !== false && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-amber-900">
+                  تم تفعيل وضع «غير قابل للضغط على البنرات القديمة والجديدة» — جميع البنرات الحالية والجديدة للعرض فقط.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ bannersNonClickable: false })}
+                  className="px-3 py-1 rounded-lg bg-white hover:bg-amber-100 text-amber-900 font-black border border-amber-300 transition-colors"
+                >
+                  السماح بالضغط من الإعدادات
+                </button>
+              </div>
+            )}
+
             {/* Banners List */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {banners.map((b) => (
@@ -3507,6 +3522,40 @@ export const AdminDashboard: React.FC = () => {
                       </label>
                     );
                   })}
+                </div>
+
+                {/* Global Non-Clickable Banners Toggle Button */}
+                <div className="pt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-black text-slate-900">
+                        غير قابل للضغط على البنرات القديمة والجديدة
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-bold">
+                        {settingsForm.bannersNonClickable !== false
+                          ? 'مفعّل الآن — جميع البنرات القديمة والجديدة للعرض فقط ولا تنقل العميل لأي صفحة.'
+                          : 'غير مفعّل — البنرات تستخدم إعداد كل بنر (واتساب أو قسم معين أو للعرض فقط).'}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const nextVal = !(settingsForm.bannersNonClickable !== false);
+                        setSettingsForm({ ...settingsForm, bannersNonClickable: nextVal });
+                        await updateSettings({ bannersNonClickable: nextVal });
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-black border transition-all shrink-0 shadow-xs ${
+                        settingsForm.bannersNonClickable !== false
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'
+                          : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                      }`}
+                    >
+                      {settingsForm.bannersNonClickable !== false
+                        ? 'مفعّل: غير قابل للضغط على البنرات القديمة والجديدة ✓'
+                        : 'تفعيل: غير قابل للضغط على البنرات القديمة والجديدة'}
+                    </button>
+                  </div>
                 </div>
               </div>
 

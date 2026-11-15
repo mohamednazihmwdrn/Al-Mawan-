@@ -34,6 +34,7 @@
         "showBrands": { "type": "boolean" },
         "showContactSection": { "type": "boolean" },
         "showPaintStudio": { "type": "boolean" },
+        "bannersNonClickable": { "type": "boolean" },
         "commercialReg": { "type": "string", "maxLength": 50 },
         "taxNumber": { "type": "string", "maxLength": 50 },
         "updatedAt": { "type": "string", "format": "date-time" }

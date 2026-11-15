@@ -251,6 +251,7 @@ function buildSettingsPayload(s: StoreSettings): Record<string, unknown> {
   if (typeof s.showBrands === 'boolean') payload.showBrands = s.showBrands;
   if (typeof s.showContactSection === 'boolean') payload.showContactSection = s.showContactSection;
   if (typeof s.showPaintStudio === 'boolean') payload.showPaintStudio = s.showPaintStudio;
+  if (typeof s.bannersNonClickable === 'boolean') payload.bannersNonClickable = s.bannersNonClickable;
   return payload;
 }
 

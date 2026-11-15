@@ -30,7 +30,7 @@ service cloud.firestore {
           'categoriesTitle', 'categoriesSubtitle', 'productsTitle', 'brandsTitle', 'brandsSubtitle',
           'contactBadge', 'contactTitle', 'contactDescription', 'footerBio',
           'showHeroBanner', 'showValueProps', 'showActionCards', 'showCategories',
-          'showBrands', 'showContactSection', 'showPaintStudio', 'updatedAt'
+          'showBrands', 'showContactSection', 'showPaintStudio', 'bannersNonClickable', 'updatedAt'
         ]) &&
         data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 150 &&
         (!('storeSubtitle' in data) || (data.storeSubtitle is string && data.storeSubtitle.size() <= 300)) &&
@@ -63,6 +63,7 @@ service cloud.firestore {
         (!('showBrands' in data) || data.showBrands is bool) &&
         (!('showContactSection' in data) || data.showContactSection is bool) &&
         (!('showPaintStudio' in data) || data.showPaintStudio is bool) &&
+        (!('bannersNonClickable' in data) || data.bannersNonClickable is bool) &&
         (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
     }
 
