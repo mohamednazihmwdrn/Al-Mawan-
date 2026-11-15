@@ -103,7 +103,7 @@ export interface BannerSlide {
   description?: string;
   image: string;
   buttonText?: string;
-  buttonActionType?: 'category' | 'whatsapp' | 'paint_studio' | 'link';
+  buttonActionType?: 'none' | 'category' | 'whatsapp' | 'paint_studio' | 'link';
   buttonTarget?: string;
   active: boolean;
   sortOrder?: number;

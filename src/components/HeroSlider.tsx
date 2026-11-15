@@ -26,16 +26,23 @@ export const HeroSlider: React.FC = () => {
   const safeIndex = currentSlide < slides.length ? currentSlide : 0;
   const current = slides[safeIndex];
 
+  const isBannerClickable =
+    current.buttonActionType === 'whatsapp' ||
+    current.buttonActionType === 'paint_studio' ||
+    (current.buttonActionType === 'category' && Boolean(current.buttonTarget));
+
   const handleActionClick = () => {
+    if (!isBannerClickable) return;
     if (current.buttonActionType === 'paint_studio') {
       setIsPaintStudioOpen(true);
     } else if (current.buttonActionType === 'category' && current.buttonTarget) {
       setSelectedCategoryId(current.buttonTarget);
+      setTimeout(() => {
+        document.getElementById('store-products-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
     } else if (current.buttonActionType === 'whatsapp') {
       const text = `السلام عليكم، بخصوص العرض المعلن: ${current.title || settings.storeName}`;
       window.open(`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(text)}`, '_blank');
-    } else if (current.buttonTarget) {
-      setSelectedCategoryId(current.buttonTarget);
     }
   };
 
@@ -47,8 +54,10 @@ export const HeroSlider: React.FC = () => {
             key={current.id}
             src={current.image}
             alt={current.title || settings.storeName}
-            onClick={handleActionClick}
-            className="w-full h-full object-fill block cursor-pointer animate-in fade-in"
+            onClick={isBannerClickable ? handleActionClick : undefined}
+            className={`w-full h-full object-fill block animate-in fade-in ${
+              isBannerClickable ? 'cursor-pointer' : 'cursor-default'
+            }`}
           />
 
           {slides.length > 1 && (

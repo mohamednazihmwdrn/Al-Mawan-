@@ -151,7 +151,7 @@ export const AdminDashboard: React.FC = () => {
     description: '',
     image: '',
     buttonText: 'تصفح العروض',
-    buttonActionType: 'category' as 'category' | 'whatsapp' | 'paint_studio' | 'link',
+    buttonActionType: 'none' as 'none' | 'category' | 'whatsapp' | 'paint_studio' | 'link',
     buttonTarget: categories[0]?.id || '',
     active: true
   });
@@ -479,7 +479,7 @@ export const AdminDashboard: React.FC = () => {
       description: '',
       image: '',
       buttonText: 'تصفح المنتجات',
-      buttonActionType: 'category',
+      buttonActionType: 'none',
       buttonTarget: categories[0]?.id || '',
       active: true
     });
@@ -495,8 +495,8 @@ export const AdminDashboard: React.FC = () => {
       description: b.description || '',
       image: b.image,
       buttonText: b.buttonText || 'تصفح العروض',
-      buttonActionType: b.buttonActionType || 'category',
-      buttonTarget: b.buttonTarget || 'power-tools',
+      buttonActionType: b.buttonActionType || 'none',
+      buttonTarget: b.buttonTarget || categories[0]?.id || '',
       active: b.active
     });
     setIsBannerModalOpen(true);
@@ -1207,39 +1207,71 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   {/* Controls Footer */}
-                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                    <button
-                      onClick={() => toggleBannerActive(b.id)}
-                      className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-colors ${
-                        b.active
-                          ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
-                          : 'border-slate-300 text-slate-600 bg-white'
-                      }`}
-                    >
-                      {b.active ? 'تعطيل الظهور' : 'تفعيل الظهور'}
-                    </button>
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${
+                          !b.buttonActionType || b.buttonActionType === 'none'
+                            ? 'bg-slate-100 text-slate-700 border-slate-200'
+                            : b.buttonActionType === 'whatsapp'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}
+                      >
+                        {!b.buttonActionType || b.buttonActionType === 'none'
+                          ? 'وضع البنر: للعرض فقط (غير قابل للضغط)'
+                          : b.buttonActionType === 'whatsapp'
+                          ? 'عند الضغط: مراسلة واتساب'
+                          : b.buttonActionType === 'paint_studio'
+                          ? 'عند الضغط: استوديو الألوان'
+                          : `عند الضغط: قسم ${categories.find((c) => c.id === b.buttonTarget)?.name || 'مختار'}`}
+                      </span>
 
-                    <div className="flex items-center gap-1.5">
+                      {b.buttonActionType && b.buttonActionType !== 'none' && (
+                        <button
+                          type="button"
+                          onClick={() => updateBanner(b.id, { buttonActionType: 'none', buttonTarget: '' })}
+                          className="text-[11px] font-black px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors"
+                        >
+                          تحويل للعرض فقط
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
                       <button
-                        onClick={() => handleOpenEditBanner(b)}
-                        className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                        title="تعديل البنر"
+                        onClick={() => toggleBannerActive(b.id)}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-colors ${
+                          b.active
+                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+                            : 'border-slate-300 text-slate-600 bg-white'
+                        }`}
                       >
-                        <Edit2 className="w-4 h-4" />
+                        {b.active ? 'تعطيل الظهور' : 'تفعيل الظهور'}
                       </button>
-                      <button
-                        onClick={() =>
-                          setConfirmModal({
-                            title: 'حذف البنر',
-                            message: 'هل أنت متأكد من حذف هذا البنر نهائياً من الواجهة؟',
-                            onConfirm: () => deleteBanner(b.id)
-                          })
-                        }
-                        className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                        title="حذف البنر"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleOpenEditBanner(b)}
+                          className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          title="تعديل البنر وإجراء الضغط"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setConfirmModal({
+                              title: 'حذف البنر',
+                              message: 'هل أنت متأكد من حذف هذا البنر نهائياً من الواجهة؟',
+                              onConfirm: () => deleteBanner(b.id)
+                            })
+                          }
+                          className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                          title="حذف البنر"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -3590,43 +3622,40 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">نص زر البنر</label>
-                  <input
-                    type="text"
-                    value={bannerForm.buttonText}
-                    onChange={(e) => setBannerForm({ ...bannerForm, buttonText: e.target.value })}
-                    placeholder="تصفح العروض، اطلب الآن..."
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">نوع الإجراء عند الضغط</label>
-                  <select
-                    value={bannerForm.buttonActionType}
-                    onChange={(e) => setBannerForm({ ...bannerForm, buttonActionType: e.target.value as any })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
-                  >
-                    <option value="category">توجيه إلى قسم معين</option>
-                    <option value="whatsapp">محادثة واتساب مبيعات</option>
-                    <option value="paint_studio">فتح استوديو كمبيوتر الألوان</option>
-                  </select>
-                </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">حالة الضغط على البنر</label>
+                <select
+                  value={bannerForm.buttonActionType}
+                  onChange={(e) => setBannerForm({ ...bannerForm, buttonActionType: e.target.value as any })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
+                >
+                  <option value="none">للعرض فقط (غير قابل للضغط)</option>
+                  <option value="whatsapp">الانتقال إلى مراسلة واتساب</option>
+                  <option value="category">الانتقال إلى قسم معين</option>
+                  <option value="paint_studio">فتح استوديو كمبيوتر الألوان</option>
+                </select>
+                {bannerForm.buttonActionType === 'none' && (
+                  <p className="text-[11px] text-slate-500 font-bold mt-1">
+                    البنر سيظهر للعرض فقط ومهما ضغط عليه العميل لن ينقله لأي مكان.
+                  </p>
+                )}
               </div>
 
               {bannerForm.buttonActionType === 'category' && (
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">القسم المستهدف للزر:</label>
+                  <label className="font-bold text-slate-700 block mb-1">القسم المستهدف عند الضغط:</label>
                   <select
                     value={bannerForm.buttonTarget}
                     onChange={(e) => setBannerForm({ ...bannerForm, buttonTarget: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold"
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+                    {categories.length === 0 ? (
+                      <option value="">لم يتم إضافة أقسام بعد</option>
+                    ) : (
+                      categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))
+                    )}
                   </select>
                 </div>
               )}

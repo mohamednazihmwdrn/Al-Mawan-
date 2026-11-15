@@ -79,7 +79,7 @@ service cloud.firestore {
         (!('description' in data) || (data.description is string && data.description.size() <= 600)) &&
         data.image is string && data.image.size() >= 5 && data.image.size() <= 150000 &&
         (!('buttonText' in data) || (data.buttonText is string && data.buttonText.size() <= 60)) &&
-        (!('buttonActionType' in data) || (data.buttonActionType in ['category', 'whatsapp', 'paint_studio', 'link'])) &&
+        (!('buttonActionType' in data) || (data.buttonActionType in ['none', 'category', 'whatsapp', 'paint_studio', 'link'])) &&
         (!('buttonTarget' in data) || (data.buttonTarget is string && data.buttonTarget.size() <= 200)) &&
         data.active is bool &&
         (!('sortOrder' in data) || (data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 10000));
