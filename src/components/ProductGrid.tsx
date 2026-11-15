@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
-import { AlertCircle, PackagePlus, MessageSquare, Phone, Layers, ChevronLeft, ArrowRight } from 'lucide-react';
+import { AlertCircle, PackagePlus, MessageSquare, Phone, Layers, ChevronLeft, ArrowRight, Search, X, LayoutGrid } from 'lucide-react';
 
 export const ProductGrid: React.FC = () => {
   const {
@@ -117,6 +117,83 @@ export const ProductGrid: React.FC = () => {
 
   return (
     <section id="store-products-section" className="max-w-7xl mx-auto w-full px-3 sm:px-4 py-6 scroll-mt-24">
+      {/* Main Page Instant Product Search & Category Filter Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-sm mb-5">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          {/* Search Input by Product Name */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث عن منتج بالاسم (مثال: سافيتو، دهان، شنيور، مسمار)..."
+              aria-label="ابحث عن المنتجات بالاسم"
+              className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-900 placeholder-slate-400 border border-slate-200 focus:border-[#163674] focus:ring-2 focus:ring-[#163674]/15 rounded-xl py-2.5 pr-10 pl-9 text-xs sm:text-sm font-bold outline-none transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="مسح البحث"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter Dropdown */}
+          {categories.length > 0 && (
+            <div className="relative sm:w-56 md:w-64 shrink-0">
+              <LayoutGrid className="w-4 h-4 text-[#163674] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <select
+                value={selectedCategoryId || ''}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  setSelectedCategoryId(val);
+                  setSelectedSubPageId(null);
+                  setSelectedFilter('all');
+                }}
+                aria-label="تصفية المنتجات حسب القسم"
+                className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-800 border border-slate-200 focus:border-[#163674] focus:ring-2 focus:ring-[#163674]/15 rounded-xl py-2.5 pr-9 pl-3 text-xs sm:text-sm font-black outline-none transition-all cursor-pointer"
+              >
+                <option value="">جميع الأقسام</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Instant Live Result Summary when Searching or Filtering */}
+        {(searchQuery.trim() || selectedCategoryId) && (
+          <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="font-bold text-slate-600">
+              النتائج الفورية:{' '}
+              <span className="font-black text-[#163674]">{filteredProducts.length}</span> منتج
+              {currentCategoryName ? ` في قسم «${currentCategoryName}»` : ''}
+              {searchQuery.trim() ? ` مطابق لـ «${searchQuery.trim()}»` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedCategoryId(null);
+                setSelectedSubPageId(null);
+                setSelectedFilter('all');
+              }}
+              className="text-rose-600 hover:underline font-black"
+            >
+              إعادة ضبط
+            </button>
+          </div>
+        )}
+      </div>
+
       {(selectedCategoryId || hasSubPagesBar || hasActiveFiltersBar) && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-sm mb-6">
           {/* Selected Category Header Banner */}
