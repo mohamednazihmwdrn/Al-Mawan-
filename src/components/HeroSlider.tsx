@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
-import { ChevronRight, ChevronLeft } from 'lucide-react';
 
 export const HeroSlider: React.FC = () => {
   const { banners, settings, setSelectedCategoryId, setIsPaintStudioOpen } = useStore();
@@ -51,34 +50,6 @@ export const HeroSlider: React.FC = () => {
             onClick={handleActionClick}
             className="w-full h-auto max-h-[580px] object-contain mx-auto block cursor-pointer animate-in fade-in"
           />
-
-          {slides.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-                }}
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-950/65 hover:bg-slate-900 text-white flex items-center justify-center border border-white/20 transition-all active:scale-95 shadow-lg backdrop-blur-xs"
-                aria-label="السابق"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentSlide((prev) => (prev + 1) % slides.length);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-950/65 hover:bg-slate-900 text-white flex items-center justify-center border border-white/20 transition-all active:scale-95 shadow-lg backdrop-blur-xs"
-                aria-label="التالي"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </>
-          )}
 
           {slides.length > 1 && (
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20">

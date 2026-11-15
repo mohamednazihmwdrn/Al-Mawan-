@@ -2,13 +2,9 @@ import React from 'react';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Header } from './components/Header';
 import { HeroSlider } from './components/HeroSlider';
-import { ValueProps } from './components/ValueProps';
-import { ActionCards } from './components/ActionCards';
 import { CategoryCircles } from './components/CategoryCircles';
 import { ProductGrid } from './components/ProductGrid';
 import { ProductDetailsPage } from './components/ProductDetailsPage';
-import { BrandsSection } from './components/BrandsSection';
-import { ContactSection } from './components/ContactSection';
 import { Footer } from './components/Footer';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
@@ -37,12 +33,8 @@ const MainLayout: React.FC = () => {
           ) : (
             <>
               {settings.showHeroBanner !== false && <HeroSlider />}
-              {settings.showValueProps !== false && <ValueProps />}
-              {settings.showActionCards !== false && <ActionCards />}
               {settings.showCategories !== false && <CategoryCircles />}
               <ProductGrid />
-              {settings.showBrands !== false && <BrandsSection />}
-              {settings.showContactSection !== false && <ContactSection />}
             </>
           )}
           <Footer />

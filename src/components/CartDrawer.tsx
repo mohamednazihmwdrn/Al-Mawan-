@@ -115,10 +115,16 @@ export const CartDrawer: React.FC = () => {
 
                     {/* Price */}
                     <div className="text-xs font-black text-rose-600 mt-1">
-                      EGP {(item.product.price * item.quantity).toFixed(2)}
-                      <span className="text-[10px] text-slate-400 font-normal mr-1">
-                        ({item.product.price} × {item.quantity})
-                      </span>
+                      {item.product.price > 0 ? (
+                        <>
+                          EGP {(item.product.price * item.quantity).toFixed(2)}
+                          <span className="text-[10px] text-slate-400 font-normal mr-1">
+                            ({item.product.price} × {item.quantity})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-blue-700">السعر عند التواصل (الكمية: {item.quantity})</span>
+                      )}
                     </div>
                   </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../context/StoreContext';
 import {
   Product,
@@ -39,7 +39,13 @@ import {
   Sparkles,
   Award,
   Eye,
-  ExternalLink
+  ExternalLink,
+  Search,
+  LayoutGrid,
+  List,
+  ChevronDown,
+  ChevronUp,
+  X
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -93,30 +99,47 @@ export const AdminDashboard: React.FC = () => {
     showToast
   } = useStore();
 
-  // Product modal state
-  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  // Product management & inline simple form state
+  const productFormRef = useRef<HTMLDivElement | null>(null);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isCompressingImage, setIsCompressingImage] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [showAdvancedProductFields, setShowAdvancedProductFields] = useState(false);
+  const [extraImageUrlInput, setExtraImageUrlInput] = useState('');
+  const [productViewMode, setProductViewMode] = useState<'cards' | 'table'>('cards');
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState<string>('all');
   const [productForm, setProductForm] = useState({
     name: '',
-    brand: '',
-    categoryId: categories[0]?.id || '',
+    brand: brands[0]?.name || 'الموان',
+    categoryId: categories[0]?.id || 'general',
     subPageId: '',
-    price: 100,
-    originalPrice: 0,
+    price: '' as string | number,
+    originalPrice: '' as string | number,
     discountBadge: '',
     image: '',
     extraImagesText: '',
     description: '',
     inStock: true,
-    stockCount: 20,
+    stockCount: '' as string | number,
     unit: 'قطعة',
     optionsText: '',
     isFeatured: true,
-    isNew: false,
+    isNew: true,
     isBestSeller: false,
     specs: [] as { label: string; value: string }[]
   });
+
+  useEffect(() => {
+    if (!editingProductId && categories.length > 0 && (!productForm.categoryId || productForm.categoryId === 'general')) {
+      setProductForm((prev) => ({ ...prev, categoryId: categories[0].id }));
+    }
+  }, [categories, editingProductId, productForm.categoryId]);
+
+  useEffect(() => {
+    if (!editingProductId && brands.length > 0 && !productForm.brand) {
+      setProductForm((prev) => ({ ...prev, brand: brands[0].name }));
+    }
+  }, [brands, editingProductId, productForm.brand]);
 
   // Banner modal state
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
@@ -213,22 +236,24 @@ export const AdminDashboard: React.FC = () => {
   // Handlers for Products
   const [isCustomBrandMode, setIsCustomBrandMode] = useState(false);
 
-  const handleOpenAddProduct = () => {
+  const resetProductForm = () => {
     setEditingProductId(null);
     setIsCustomBrandMode(false);
+    setExtraImageUrlInput('');
+    setShowAdvancedProductFields(false);
     setProductForm({
       name: '',
       brand: brands[0]?.name || 'الموان',
-      categoryId: categories[0]?.id || 'power-tools',
+      categoryId: categories[0]?.id || 'general',
       subPageId: '',
-      price: 0,
-      originalPrice: 0,
+      price: '',
+      originalPrice: '',
       discountBadge: '',
       image: '',
       extraImagesText: '',
       description: '',
       inStock: true,
-      stockCount: 10,
+      stockCount: '',
       unit: 'قطعة',
       optionsText: '',
       isFeatured: true,
@@ -236,7 +261,14 @@ export const AdminDashboard: React.FC = () => {
       isBestSeller: false,
       specs: []
     });
-    setIsProductModalOpen(true);
+  };
+
+  const handleOpenAddProduct = () => {
+    resetProductForm();
+    setAdminSubTab('products');
+    setTimeout(() => {
+      productFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
   };
 
   const handleOpenEditProduct = (prod: Product) => {
@@ -245,19 +277,28 @@ export const AdminDashboard: React.FC = () => {
     const isBuiltInStoreBrand = prod.brand === 'الموان';
     setIsCustomBrandMode(Boolean(prod.brand && !matchedBrand && !isBuiltInStoreBrand));
     const extraImgs = (prod.images || []).filter((img) => img !== prod.image);
+    setExtraImageUrlInput('');
+    setShowAdvancedProductFields(
+      Boolean(
+        prod.discountBadge ||
+        (prod.options && prod.options.length > 0) ||
+        (prod.specs && prod.specs.length > 0) ||
+        prod.unit !== 'قطعة'
+      )
+    );
     setProductForm({
       name: prod.name,
       brand: matchedBrand ? matchedBrand.name : prod.brand,
-      categoryId: prod.categoryId,
+      categoryId: prod.categoryId || categories[0]?.id || 'general',
       subPageId: prod.subPageId || '',
-      price: prod.price,
-      originalPrice: prod.originalPrice || 0,
+      price: prod.price > 0 ? prod.price : '',
+      originalPrice: prod.originalPrice || '',
       discountBadge: prod.discountBadge || '',
       image: prod.image,
       extraImagesText: extraImgs.join('\n'),
       description: prod.description,
       inStock: prod.inStock,
-      stockCount: prod.stockCount,
+      stockCount: prod.stockCount > 0 ? prod.stockCount : '',
       unit: prod.unit,
       optionsText: prod.options?.join(', ') || '',
       isFeatured: Boolean(prod.isFeatured),
@@ -265,7 +306,32 @@ export const AdminDashboard: React.FC = () => {
       isBestSeller: Boolean(prod.isBestSeller),
       specs: prod.specs ? prod.specs.map((s) => ({ ...s })) : []
     });
-    setIsProductModalOpen(true);
+    setAdminSubTab('products');
+    setTimeout(() => {
+      productFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
+  const extraImagesList = productForm.extraImagesText
+    .split(/\n|,/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const handleRemoveExtraImage = (idxToRemove: number) => {
+    const updated = extraImagesList.filter((_, i) => i !== idxToRemove);
+    setProductForm((prev) => ({ ...prev, extraImagesText: updated.join('\n') }));
+  };
+
+  const handleAddExtraImageUrl = () => {
+    const clean = extraImageUrlInput.trim();
+    if (!clean) return;
+    if (clean.length < 5) {
+      showToast('يرجى إدخال رابط صورة صحيح');
+      return;
+    }
+    const updated = Array.from(new Set([...extraImagesList, clean])).slice(0, 14);
+    setProductForm((prev) => ({ ...prev, extraImagesText: updated.join('\n') }));
+    setExtraImageUrlInput('');
   };
 
   const handleProductFileUpload = async (
@@ -321,13 +387,34 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productForm.image.trim()) {
-      showToast('يرجى رفع صورة للمنتج أو وضع رابط صورة صحيح');
+    if (productForm.name.trim().length < 2) {
+      showToast('يرجى كتابة اسم المنتج (حرفين على الأقل)');
       return;
     }
+    const parsedPrice = productForm.price === '' ? 0 : Number(productForm.price);
+    if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+      showToast('يرجى إدخال سعر صحيح للمنتج أو تركه فارغاً ليظهر (السعر عند التواصل)');
+      return;
+    }
+    const parsedStockCount = productForm.stockCount === '' ? 0 : Number(productForm.stockCount);
+    if (Number.isNaN(parsedStockCount) || parsedStockCount < 0) {
+      showToast('يرجى إدخال كمية صحيحة أو تركها فارغة ليظهر (متوفر)');
+      return;
+    }
+    if (productForm.image.trim().length < 5) {
+      showToast('يرجى رفع صورة رئيسية للمنتج أو وضع رابط صورة صحيح');
+      return;
+    }
+    if (productForm.description.trim().length < 2) {
+      showToast('يرجى كتابة وصف مختصر للمنتج');
+      return;
+    }
+
     const cat = categories.find(c => c.id === productForm.categoryId);
+    const resolvedCategoryId = cat?.id || (productForm.categoryId && productForm.categoryId.trim()) || 'general';
+    const resolvedCategoryName = cat?.name || 'عام';
     const sp = productForm.subPageId
-      ? subPages.find((s) => s.id === productForm.subPageId && s.categoryId === productForm.categoryId)
+      ? subPages.find((s) => s.id === productForm.subPageId && s.categoryId === resolvedCategoryId)
       : undefined;
     const options = productForm.optionsText
       ? productForm.optionsText.split(',').map(s => s.trim()).filter(Boolean)
@@ -341,22 +428,24 @@ export const AdminDashboard: React.FC = () => {
       .map((s) => ({ label: s.label.trim(), value: s.value.trim() }))
       .filter((s) => s.label && s.value);
 
+    const parsedOriginal = Number(productForm.originalPrice);
+
     const payload = {
-      name: productForm.name,
-      brand: productForm.brand,
-      categoryId: productForm.categoryId,
-      categoryName: cat?.name || 'عام',
+      name: productForm.name.trim(),
+      brand: productForm.brand.trim() || 'الموان',
+      categoryId: resolvedCategoryId,
+      categoryName: resolvedCategoryName,
       subPageId: sp?.id,
       subPageName: sp?.name,
-      price: Number(productForm.price),
-      originalPrice: Number(productForm.originalPrice) > 0 ? Number(productForm.originalPrice) : undefined,
-      discountBadge: productForm.discountBadge || undefined,
-      image: productForm.image,
+      price: parsedPrice,
+      originalPrice: parsedOriginal > 0 ? parsedOriginal : undefined,
+      discountBadge: productForm.discountBadge.trim() || undefined,
+      image: productForm.image.trim(),
       images: allImages,
-      description: productForm.description,
+      description: productForm.description.trim(),
       inStock: productForm.inStock,
-      stockCount: Number(productForm.stockCount),
-      unit: productForm.unit,
+      stockCount: Math.max(0, parsedStockCount),
+      unit: productForm.unit.trim() || 'قطعة',
       isFeatured: productForm.isFeatured,
       isNew: productForm.isNew,
       isBestSeller: productForm.isBestSeller,
@@ -365,15 +454,18 @@ export const AdminDashboard: React.FC = () => {
       specs: cleanSpecs.length > 0 ? cleanSpecs : undefined
     };
 
+    setIsSavingProduct(true);
     try {
       if (editingProductId) {
         await updateProduct(editingProductId, payload);
       } else {
         await addProduct(payload);
       }
-      setIsProductModalOpen(false);
+      resetProductForm();
     } catch {
       // handled by StoreContext toast/error handler
+    } finally {
+      setIsSavingProduct(false);
     }
   };
 
@@ -768,9 +860,17 @@ export const AdminDashboard: React.FC = () => {
   });
 
   const filteredAdminProducts = products.filter(p => {
+    if (adminCategoryFilter !== 'all' && p.categoryId !== adminCategoryFilter) {
+      return false;
+    }
     if (!adminSearch.trim()) return true;
     const q = adminSearch.toLowerCase();
-    return p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.categoryName.toLowerCase().includes(q);
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.brand.toLowerCase().includes(q) ||
+      p.categoryName.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q)
+    );
   });
 
   return (
@@ -1150,158 +1250,781 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: PRODUCTS MANAGER */}
+        {/* TAB 3: PRODUCTS MANAGER (Simple Form + Visual Display) */}
         {adminSubTab === 'products' && (
-          <div className="space-y-4">
-            
-            {/* Header with Search and Add Button */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="relative w-full sm:w-80">
-                <input
-                  type="text"
-                  value={adminSearch}
-                  onChange={(e) => setAdminSearch(e.target.value)}
-                  placeholder="ابحث بالاسم أو الماركة أو القسم..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                {products.length > 0 && (
+            {/* Left Column: Simple Product Entry & Edit Form */}
+            <div
+              ref={productFormRef}
+              className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+            >
+              <div className="p-4 bg-[#122854] text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-sm font-black">
+                    {editingProductId ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد للمتجر'}
+                  </h3>
+                </div>
+                {editingProductId && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setConfirmModal({
-                        title: 'حذف جميع المنتجات',
-                        message: `هل أنت متأكد من حذف جميع المنتجات (${products.length} منتج) لتنظيف المتجر بالكامل؟`,
-                        confirmLabel: 'نعم، احذف الكل',
-                        onConfirm: () => clearAllProducts()
-                      })
-                    }
-                    className="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                    onClick={resetProductForm}
+                    className="text-[11px] font-bold bg-white/15 hover:bg-white/25 text-white px-2.5 py-1 rounded-lg transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    <span>حذف جميع المنتجات</span>
+                    إلغاء التعديل
                   </button>
                 )}
-
-                <button
-                  onClick={handleOpenAddProduct}
-                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md active:scale-95"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>إضافة منتج جديد</span>
-                </button>
               </div>
+
+              <form onSubmit={handleSaveProduct} className="p-4 sm:p-5 space-y-3.5 text-xs">
+                {/* Product Name */}
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">اسم المنتج *</label>
+                  <input
+                    type="text"
+                    required
+                    minLength={2}
+                    value={productForm.name}
+                    onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                    placeholder="مثال: بلاستيك مطفي 3030 - 9 لتر، شنيور دقاق..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Price, Optional Original Price & Optional Stock Count */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">السعر (جنيه — اختياري)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={productForm.price}
+                      onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                      placeholder="اتركه فارغاً: عند التواصل"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">السعر قبل الخصم (اختياري)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={productForm.originalPrice}
+                      onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
+                      placeholder="لإظهار عرض"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">العدد بالمخزن (اختياري)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={productForm.stockCount}
+                      onChange={(e) => setProductForm({ ...productForm, stockCount: e.target.value })}
+                      placeholder="اتركه فارغاً: متوفر"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Main Image Upload + URL + Preview */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800">صورة المنتج الرئيسية *</label>
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] shadow-xs transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isCompressingImage ? 'جاري التجهيز...' : 'اختر صورة من الجهاز'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleProductFileUpload(e, 'main')}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={productForm.image}
+                    onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
+                    placeholder="أو الصق رابط الصورة مباشرة https://..."
+                    dir="ltr"
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+
+                  {productForm.image && (
+                    <div className="relative bg-white rounded-xl border border-slate-200 p-2 flex items-center gap-3">
+                      <img
+                        src={productForm.image}
+                        alt="معاينة الصورة الرئيسية"
+                        className="w-16 h-16 rounded-lg object-contain bg-slate-50 border border-slate-100 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] font-black text-emerald-700">تم تجهيز الصورة الرئيسية</div>
+                        <div className="text-[10px] text-slate-500 truncate">ستظهر للعملاء كصورة الغلاف الأساسية</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setProductForm({ ...productForm, image: '' })}
+                        className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors"
+                        title="إزالة الصورة"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Extra Images Gallery */}
+                  <div className="pt-2 border-t border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 text-[11px]">صور إضافية للمنتج (اختياري)</span>
+                      <label className="cursor-pointer inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200 transition-colors">
+                        <Plus className="w-3 h-3" />
+                        <span>إضافة صور من الجهاز</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={(e) => handleProductFileUpload(e, 'extra')}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={extraImageUrlInput}
+                        onChange={(e) => setExtraImageUrlInput(e.target.value)}
+                        placeholder="أو الصق رابط صورة إضافية..."
+                        dir="ltr"
+                        className="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddExtraImageUrl}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-[11px] shrink-0"
+                      >
+                        إضافة
+                      </button>
+                    </div>
+
+                    {extraImagesList.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {extraImagesList.map((imgUrl, idx) => (
+                          <div key={idx} className="relative w-14 h-14 rounded-lg bg-white border border-slate-200 p-0.5 group">
+                            <img
+                              src={imgUrl}
+                              alt={`صورة ${idx + 2}`}
+                              className="w-full h-full object-contain rounded-md"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExtraImage(idx)}
+                              className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow text-[10px]"
+                              title="حذف الصورة"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">وصف المنتج *</label>
+                  <textarea
+                    rows={3}
+                    required
+                    minLength={2}
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    placeholder="اكتب وصفاً بسيطاً وواضحاً لمواصفات واستخدامات المنتج..."
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Category & Brand */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">القسم *</label>
+                    <select
+                      value={productForm.categoryId}
+                      onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value, subPageId: '' })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {categories.length === 0 && (
+                        <option value="general">عام (بدون أقسام بعد)</option>
+                      )}
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">العلامة التجارية</label>
+                    <select
+                      value={isCustomBrandMode ? '__custom__' : productForm.brand}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__custom__') {
+                          setIsCustomBrandMode(true);
+                          setProductForm({ ...productForm, brand: '' });
+                        } else {
+                          setIsCustomBrandMode(false);
+                          setProductForm({ ...productForm, brand: val });
+                        }
+                      }}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {brands.map((br) => (
+                        <option key={br.id} value={br.name}>
+                          {br.name} — {br.label}
+                        </option>
+                      ))}
+                      <option value="الموان">الموان — منتج خاص بالمتجر</option>
+                      <option value="__custom__">أخرى (كتابة اسم ماركة أخرى...)</option>
+                    </select>
+                    {isCustomBrandMode && (
+                      <input
+                        type="text"
+                        required
+                        value={productForm.brand}
+                        onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })}
+                        placeholder="اكتب اسم الماركة..."
+                        className="w-full mt-2 bg-white border border-blue-300 rounded-xl p-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* SubPage selector only if category has subPages */}
+                {subPages.some((sp) => sp.categoryId === productForm.categoryId) && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">الصفحة الفرعية (اختياري)</label>
+                    <select
+                      value={productForm.subPageId}
+                      onChange={(e) => setProductForm({ ...productForm, subPageId: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">عام داخل القسم الرئيسي</option>
+                      {subPages
+                        .filter((sp) => sp.categoryId === productForm.categoryId)
+                        .map((sp) => (
+                          <option key={sp.id} value={sp.id}>{sp.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Collapsible Advanced Options */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedProductFields((prev) => !prev)}
+                    className="w-full px-3 py-2.5 bg-slate-50 hover:bg-slate-100 flex items-center justify-between text-[11px] font-black text-slate-700 transition-colors"
+                  >
+                    <span>خيارات إضافية (المخزون، الوحدة، المقاسات، شارات العرض، المواصفات)</span>
+                    {showAdvancedProductFields ? (
+                      <ChevronUp className="w-4 h-4 text-slate-500" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-500" />
+                    )}
+                  </button>
+
+                  {showAdvancedProductFields && (
+                    <div className="p-3 bg-white space-y-3 border-t border-slate-200">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">وحدة البيع</label>
+                          <input
+                            type="text"
+                            value={productForm.unit}
+                            onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}
+                            placeholder="قطعة، بستلة..."
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-bold text-slate-700 block mb-1">شارة خصم</label>
+                          <input
+                            type="text"
+                            value={productForm.discountBadge}
+                            onChange={(e) => setProductForm({ ...productForm, discountBadge: e.target.value })}
+                            placeholder="وفر 15%"
+                            className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">المقاسات أو الألوان (مفصولة بفاصلة ,)</label>
+                        <input
+                          type="text"
+                          value={productForm.optionsText}
+                          onChange={(e) => setProductForm({ ...productForm, optionsText: e.target.value })}
+                          placeholder="مقاس 10 مم, مقاس 12 مم..."
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 font-medium"
+                        />
+                      </div>
+
+                      {/* Specs Editor */}
+                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-800 text-[11px]">مواصفات فنية إضافية</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProductForm((prev) => ({
+                                ...prev,
+                                specs: [...prev.specs, { label: '', value: '' }]
+                              }))
+                            }
+                            className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200 flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>إضافة مواصفة</span>
+                          </button>
+                        </div>
+
+                        {productForm.specs.map((sp, idx) => (
+                          <div key={idx} className="grid grid-cols-11 gap-1.5 items-center">
+                            <input
+                              type="text"
+                              value={sp.label}
+                              onChange={(e) => {
+                                const updated = [...productForm.specs];
+                                updated[idx] = { ...updated[idx], label: e.target.value };
+                                setProductForm({ ...productForm, specs: updated });
+                              }}
+                              placeholder="المواصفة"
+                              className="col-span-5 bg-white border border-slate-300 rounded-lg p-1.5 text-[11px]"
+                            />
+                            <input
+                              type="text"
+                              value={sp.value}
+                              onChange={(e) => {
+                                const updated = [...productForm.specs];
+                                updated[idx] = { ...updated[idx], value: e.target.value };
+                                setProductForm({ ...productForm, specs: updated });
+                              }}
+                              placeholder="القيمة"
+                              className="col-span-5 bg-white border border-slate-300 rounded-lg p-1.5 text-[11px]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProductForm((prev) => ({
+                                  ...prev,
+                                  specs: prev.specs.filter((_, i) => i !== idx)
+                                }));
+                              }}
+                              className="col-span-1 p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                        <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                          <input
+                            type="checkbox"
+                            checked={productForm.inStock}
+                            onChange={(e) => setProductForm({ ...productForm, inStock: e.target.checked })}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <span>متوفر بالمخزن</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                          <input
+                            type="checkbox"
+                            checked={productForm.isFeatured}
+                            onChange={(e) => setProductForm({ ...productForm, isFeatured: e.target.checked })}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <span>منتج مميز</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                          <input
+                            type="checkbox"
+                            checked={productForm.isNew}
+                            onChange={(e) => setProductForm({ ...productForm, isNew: e.target.checked })}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <span>وصل حديثاً</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                          <input
+                            type="checkbox"
+                            checked={productForm.isBestSeller}
+                            onChange={(e) => setProductForm({ ...productForm, isBestSeller: e.target.checked })}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <span>الأكثر مبيعاً</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={isSavingProduct || isCompressingImage}
+                  className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-black text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>
+                    {isSavingProduct
+                      ? 'جاري الحفظ والنشر...'
+                      : editingProductId
+                      ? 'حفظ تعديلات المنتج'
+                      : 'نشر المنتج وإضافته للمتجر'}
+                  </span>
+                </button>
+              </form>
             </div>
 
-            {products.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center shadow-sm space-y-3">
-                <Package className="w-12 h-12 text-blue-300 mx-auto" />
-                <div className="text-base font-black text-slate-900">
-                  المتجر نظيف تماماً وجاهز لإضافة منتجاتك الحقيقية
+            {/* Right Column: Products Display & Management Panel */}
+            <div className="lg:col-span-7 space-y-4">
+
+              {/* Search, Category Filter & Display Switcher */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span>المنتجات المعروضة بالمتجر ({filteredAdminProducts.length})</span>
+                  </h3>
+
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setProductViewMode('cards')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
+                          productViewMode === 'cards'
+                            ? 'bg-white text-blue-700 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="عرض كبطاقات"
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span>بطاقات</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProductViewMode('table')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
+                          productViewMode === 'table'
+                            ? 'bg-white text-blue-700 shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="عرض كجدول"
+                      >
+                        <List className="w-3.5 h-3.5" />
+                        <span>جدول</span>
+                      </button>
+                    </div>
+
+                    {products.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfirmModal({
+                            title: 'حذف جميع المنتجات',
+                            message: `هل أنت متأكد من حذف جميع المنتجات (${products.length} منتج) لتنظيف المتجر بالكامل؟`,
+                            confirmLabel: 'نعم، احذف الكل',
+                            onConfirm: () => clearAllProducts()
+                          })
+                        }
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-[11px] flex items-center gap-1 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>حذف الكل</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  لا توجد أي منتجات وهمية الآن. اضغط على زر "إضافة منتج جديد" لإضافة أول منتج بصوره وسعره ومواصفاته ليظهر فوراً للعملاء.
-                </p>
-                <button
-                  onClick={handleOpenAddProduct}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs inline-flex items-center gap-1.5 shadow-md"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>إضافة أول منتج الآن</span>
-                </button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="relative sm:col-span-7">
+                    <input
+                      type="text"
+                      value={adminSearch}
+                      onChange={(e) => setAdminSearch(e.target.value)}
+                      placeholder="ابحث بالاسم أو الوصف أو الماركة..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl py-2 pr-9 pl-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                  </div>
+
+                  <select
+                    value={adminCategoryFilter}
+                    onChange={(e) => setAdminCategoryFilter(e.target.value)}
+                    className="sm:col-span-5 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">جميع الأقسام ({products.length})</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({products.filter((p) => p.categoryId === c.id).length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            ) : (
-              /* Products Table */
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right text-xs">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
-                      <tr>
-                        <th className="p-3.5">المنتج والماركة</th>
-                        <th className="p-3.5">القسم</th>
-                        <th className="p-3.5">السعر الحالي</th>
-                        <th className="p-3.5">السعر الأصلي</th>
-                        <th className="p-3.5">حالة التوفر</th>
-                        <th className="p-3.5">المخزون</th>
-                        <th className="p-3.5 text-center">إجراءات</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredAdminProducts.map((p) => (
-                        <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3.5 flex items-center gap-3">
+
+              {/* Empty States or Products List */}
+              {products.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-10 text-center shadow-sm space-y-2.5">
+                  <Package className="w-12 h-12 text-blue-300 mx-auto" />
+                  <div className="text-sm sm:text-base font-black text-slate-900">
+                    لا توجد منتجات مضافة حتى الآن
+                  </div>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                    استخدم نموذج الإدخال البسيط لرفع صور المنتج وكتابة اسمه ووصفه وسعره، وسيظهر هنا وفي واجهة المتجر للعملاء فوراً.
+                  </p>
+                </div>
+              ) : filteredAdminProducts.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-sm space-y-2">
+                  <div className="text-sm font-black text-slate-800">لا توجد منتجات تطابق البحث أو القسم المحدد</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminSearch('');
+                      setAdminCategoryFilter('all');
+                    }}
+                    className="text-xs font-bold text-blue-600 hover:underline"
+                  >
+                    إظهار جميع المنتجات
+                  </button>
+                </div>
+              ) : productViewMode === 'cards' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {filteredAdminProducts.map((p) => {
+                    const photoCount = p.images?.length || (p.image ? 1 : 0);
+                    const isBeingEdited = editingProductId === p.id;
+                    return (
+                      <div
+                        key={p.id}
+                        className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col justify-between transition-all ${
+                          isBeingEdited
+                            ? 'border-blue-500 ring-2 ring-blue-200'
+                            : 'border-slate-200 hover:border-blue-300'
+                        }`}
+                      >
+                        <div>
+                          {/* Product Image Showcase */}
+                          <div className="relative h-40 bg-slate-50 border-b border-slate-100 p-3 flex items-center justify-center">
                             <img
                               src={p.image}
                               alt={p.name}
-                              className="w-10 h-10 rounded-lg object-contain bg-slate-100 border border-slate-200 p-0.5 shrink-0"
+                              className="max-h-full max-w-full object-contain"
                             />
-                            <div className="min-w-0">
-                              <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
-                              <div className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</div>
-                            </div>
-                          </td>
-                          <td className="p-3.5 text-slate-600">
-                            <div className="font-bold text-slate-800">{p.categoryName}</div>
-                            {p.subPageName && (
-                              <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
-                                ↳ {p.subPageName}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-3.5 font-black text-rose-600">
-                            EGP {p.price.toFixed(2)}
-                          </td>
-                          <td className="p-3.5 text-slate-400 line-through">
-                            {p.originalPrice ? `EGP ${p.originalPrice.toFixed(2)}` : '-'}
-                          </td>
-                          <td className="p-3.5">
                             <button
+                              type="button"
                               onClick={() => toggleStock(p.id)}
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                              className={`absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-black border shadow-2xs ${
                                 p.inStock
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : 'bg-rose-50 text-rose-700 border-rose-200'
                               }`}
                             >
-                              {p.inStock ? 'متوفر بالمخزن' : 'غير متوفر'}
+                              {p.inStock ? 'متوفر' : 'نفد'}
                             </button>
-                          </td>
-                          <td className="p-3.5 font-bold text-slate-700">
-                            {p.stockCount} {p.unit}
-                          </td>
-                          <td className="p-3.5">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => handleOpenEditProduct(p)}
-                                className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                                title="تعديل"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  setConfirmModal({
-                                    title: 'حذف المنتج',
-                                    message: `هل أنت متأكد من حذف المنتج: "${p.name}"؟ سيختفي فوراً من كافة أجهزة العملاء.`,
-                                    onConfirm: () => deleteProduct(p.id)
-                                  })
-                                }
-                                className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                                title="حذف"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+
+                            {photoCount > 1 && (
+                              <span className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-slate-900/75 text-white text-[10px] font-bold flex items-center gap-1">
+                                <ImageIcon className="w-3 h-3" />
+                                <span>{photoCount} صور</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Product Info */}
+                          <div className="p-3.5 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2 text-[10px] font-bold">
+                              <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md truncate">
+                                {p.categoryName}{p.subPageName ? ` • ${p.subPageName}` : ''}
+                              </span>
+                              <span className="text-slate-500 uppercase truncate">{p.brand}</span>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                            <h4 className="text-xs sm:text-sm font-black text-slate-900 line-clamp-1">
+                              {p.name}
+                            </h4>
+
+                            <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                              {p.description}
+                            </p>
+
+                            <div className="flex items-baseline gap-2 pt-1">
+                              {p.price > 0 ? (
+                                <>
+                                  <span className="text-sm font-black text-rose-600">
+                                    EGP {p.price.toFixed(2)}
+                                  </span>
+                                  {p.originalPrice && p.originalPrice > p.price && (
+                                    <span className="text-[11px] text-slate-400 line-through">
+                                      EGP {p.originalPrice.toFixed(2)}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-xs font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                                  السعر عند التواصل
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-500 font-bold mr-auto">
+                                {p.inStock ? (p.stockCount > 0 ? `${p.stockCount} ${p.unit}` : 'متوفر') : 'غير متوفر'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions Bar */}
+                        <div className="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditProduct(p)}
+                            className="flex-1 py-1.5 px-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-1 transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span>تعديل</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleStock(p.id)}
+                            className="py-1.5 px-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center gap-1 transition-colors"
+                            title="تبديل حالة التوفر"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>{p.inStock ? 'إخفاء التوفر' : 'تفعيل التوفر'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConfirmModal({
+                                title: 'حذف المنتج',
+                                message: `هل أنت متأكد من حذف المنتج: "${p.name}"؟ سيختفي فوراً من كافة أجهزة العملاء.`,
+                                onConfirm: () => deleteProduct(p.id)
+                              })
+                            }
+                            className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition-colors"
+                            title="حذف المنتج"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                        <tr>
+                          <th className="p-3.5">المنتج والماركة</th>
+                          <th className="p-3.5">القسم</th>
+                          <th className="p-3.5">السعر</th>
+                          <th className="p-3.5">التوفر</th>
+                          <th className="p-3.5 text-center">إجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredAdminProducts.map((p) => (
+                          <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="p-3.5 flex items-center gap-3">
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                className="w-10 h-10 rounded-lg object-contain bg-slate-100 border border-slate-200 p-0.5 shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="font-bold text-slate-900 line-clamp-1">{p.name}</div>
+                                <div className="text-[10px] text-blue-600 font-bold uppercase">{p.brand}</div>
+                              </div>
+                            </td>
+                            <td className="p-3.5 text-slate-600">
+                              <div className="font-bold text-slate-800">{p.categoryName}</div>
+                              {p.subPageName && (
+                                <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                                  ↳ {p.subPageName}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-3.5 font-black text-rose-600">
+                              {p.price > 0 ? (
+                                <>
+                                  <div>EGP {p.price.toFixed(2)}</div>
+                                  {p.originalPrice && p.originalPrice > p.price && (
+                                    <div className="text-[10px] text-slate-400 line-through font-normal">
+                                      EGP {p.originalPrice.toFixed(2)}
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[11px] font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                                  السعر عند التواصل
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3.5">
+                              <button
+                                onClick={() => toggleStock(p.id)}
+                                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                                  p.inStock
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                                }`}
+                              >
+                                {p.inStock ? 'متوفر' : 'غير متوفر'}
+                              </button>
+                            </td>
+                            <td className="p-3.5">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => handleOpenEditProduct(p)}
+                                  className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                  title="تعديل"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setConfirmModal({
+                                      title: 'حذف المنتج',
+                                      message: `هل أنت متأكد من حذف المنتج: "${p.name}"؟ سيختفي فوراً من كافة أجهزة العملاء.`,
+                                      onConfirm: () => deleteProduct(p.id)
+                                    })
+                                  }
+                                  className="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                                  title="حذف"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
 
           </div>
         )}
@@ -2933,393 +3656,6 @@ export const AdminDashboard: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow"
                 >
                   {editingBannerId ? 'حفظ تعديلات البنر' : 'إضافة البنر للواجهة'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add / Edit Product Modal */}
-      {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
-            <div className="p-4 bg-[#122854] text-white flex items-center justify-between">
-              <h3 className="text-sm font-black">
-                {editingProductId ? 'تعديل بيانات المنتج' : 'إضافة منتج جديد للمتجر'}
-              </h3>
-              <button
-                onClick={() => setIsProductModalOpen(false)}
-                className="p-1 rounded-full hover:bg-white/10 text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">اسم المنتج بالكامل *</label>
-                <input
-                  type="text"
-                  required
-                  value={productForm.name}
-                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                  placeholder="مثال: شنيور بوش دقاق 650 وات..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">العلامة التجارية / الشركة *</label>
-                  <select
-                    value={isCustomBrandMode ? '__custom__' : productForm.brand}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === '__custom__') {
-                        setIsCustomBrandMode(true);
-                        setProductForm({ ...productForm, brand: '' });
-                      } else {
-                        setIsCustomBrandMode(false);
-                        setProductForm({ ...productForm, brand: val });
-                      }
-                    }}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {brands.map((br) => (
-                      <option key={br.id} value={br.name}>
-                        {br.name} — {br.label}
-                      </option>
-                    ))}
-                    <option value="الموان">الموان — منتج خاص بالمتجر</option>
-                    <option value="__custom__">أخرى (كتابة اسم ماركة أخرى يدوياً...)</option>
-                  </select>
-
-                  {isCustomBrandMode ? (
-                    <input
-                      type="text"
-                      required
-                      value={productForm.brand}
-                      onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })}
-                      placeholder="اكتب اسم الماركة..."
-                      className="w-full mt-2 bg-white border border-blue-300 rounded-xl p-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  ) : (
-                    (() => {
-                      const selectedBrandObj = brands.find((b) => b.name === productForm.brand);
-                      if (!selectedBrandObj?.logoUrl) return null;
-                      return (
-                        <div className="mt-1.5 inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
-                          <img
-                            src={selectedBrandObj.logoUrl}
-                            alt={selectedBrandObj.name}
-                            className="h-5 w-auto max-w-[48px] object-contain"
-                          />
-                          <span className="text-[10px] font-bold text-slate-600">{selectedBrandObj.label}</span>
-                        </div>
-                      );
-                    })()
-                  )}
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">القسم الرئيسي *</label>
-                  <select
-                    value={productForm.categoryId}
-                    onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value, subPageId: '' })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">الصفحة الفرعية داخل القسم (اختياري)</label>
-                <select
-                  value={productForm.subPageId}
-                  onChange={(e) => setProductForm({ ...productForm, subPageId: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">
-                    {subPages.some((sp) => sp.categoryId === productForm.categoryId)
-                      ? 'عام داخل القسم الرئيسي (بدون صفحة فرعية محددة)'
-                      : 'لا توجد صفحات فرعية مضافة داخل هذا القسم'}
-                  </option>
-                  {subPages
-                    .filter((sp) => sp.categoryId === productForm.categoryId)
-                    .map((sp) => (
-                      <option key={sp.id} value={sp.id}>{sp.name}</option>
-                    ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">السعر الحالي (EGP) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={productForm.price}
-                    onChange={(e) => setProductForm({ ...productForm, price: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-black text-rose-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">السعر الأصلي السابق (EGP)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={productForm.originalPrice}
-                    onChange={(e) => setProductForm({ ...productForm, originalPrice: Number(e.target.value) })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">شارة التخفيض (اختياري)</label>
-                  <input
-                    type="text"
-                    value={productForm.discountBadge}
-                    onChange={(e) => setProductForm({ ...productForm, discountBadge: e.target.value })}
-                    placeholder="وفر EGP 15"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="font-bold text-slate-700">الصورة الرئيسية للمنتج *</label>
-                    <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200">
-                      <Upload className="w-3 h-3" />
-                      <span>{isCompressingImage ? 'جاري...' : 'رفع من الجهاز'}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleProductFileUpload(e, 'main')}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={productForm.image}
-                    onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
-                    placeholder="https://... أو ارفع صورة"
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {productForm.image && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <img
-                        src={productForm.image}
-                        alt="معاينة المنتج"
-                        className="w-12 h-12 rounded-lg object-contain bg-slate-100 border border-slate-200 p-0.5"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setProductForm({ ...productForm, image: '' })}
-                        className="text-[11px] text-rose-600 font-bold hover:underline"
-                      >
-                        مسح الصورة
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">وحدة البيع</label>
-                    <input
-                      type="text"
-                      value={productForm.unit}
-                      onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}
-                      placeholder="قطعة، طقم، بستلة..."
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">الكمية بالمخزن</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={productForm.stockCount}
-                      onChange={(e) => setProductForm({ ...productForm, stockCount: Number(e.target.value) })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-bold text-slate-700">صور إضافية لمعرض المنتج (سطر لكل رابط - اختياري)</label>
-                  <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                    <Upload className="w-3 h-3" />
-                    <span>إضافة صور متعددة</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => handleProductFileUpload(e, 'extra')}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <textarea
-                  rows={2}
-                  value={productForm.extraImagesText}
-                  onChange={(e) => setProductForm({ ...productForm, extraImagesText: e.target.value })}
-                  placeholder="ضع روابط صور إضافية (كل رابط في سطر جديد) أو ارفعها من جهازك..."
-                  dir="ltr"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">الخيارات أو المقاسات (مفصولة بفاصلة ,)</label>
-                <input
-                  type="text"
-                  value={productForm.optionsText}
-                  onChange={(e) => setProductForm({ ...productForm, optionsText: e.target.value })}
-                  placeholder="مقاس 10 مم, مقاس 12 مم, مقاس 14 مم..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Specs Editor */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800">المواصفات الفنية للمنتج (اختياري)</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setProductForm((prev) => ({
-                        ...prev,
-                        specs: [...prev.specs, { label: '', value: '' }]
-                      }))
-                    }
-                    className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] border border-blue-200 flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>إضافة مواصفة</span>
-                  </button>
-                </div>
-
-                {productForm.specs.map((sp, idx) => (
-                  <div key={idx} className="grid grid-cols-11 gap-2 items-center">
-                    <input
-                      type="text"
-                      value={sp.label}
-                      onChange={(e) => {
-                        const updated = [...productForm.specs];
-                        updated[idx] = { ...updated[idx], label: e.target.value };
-                        setProductForm({ ...productForm, specs: updated });
-                      }}
-                      placeholder="المواصفة (مثال: القدرة)"
-                      className="col-span-5 bg-white border border-slate-300 rounded-lg p-2 text-xs"
-                    />
-                    <input
-                      type="text"
-                      value={sp.value}
-                      onChange={(e) => {
-                        const updated = [...productForm.specs];
-                        updated[idx] = { ...updated[idx], value: e.target.value };
-                        setProductForm({ ...productForm, specs: updated });
-                      }}
-                      placeholder="القيمة (مثال: 650 وات)"
-                      className="col-span-5 bg-white border border-slate-300 rounded-lg p-2 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProductForm((prev) => ({
-                          ...prev,
-                          specs: prev.specs.filter((_, i) => i !== idx)
-                        }));
-                      }}
-                      className="col-span-1 p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center"
-                      title="حذف"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">وصف المنتج ومميزاته *</label>
-                <textarea
-                  rows={3}
-                  required
-                  value={productForm.description}
-                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                  placeholder="اكتب وصفاً واضحاً للمنتج واستخداماته وضمانه..."
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={productForm.inStock}
-                    onChange={(e) => setProductForm({ ...productForm, inStock: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                  <span>متوفر بالمخزن</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={productForm.isFeatured}
-                    onChange={(e) => setProductForm({ ...productForm, isFeatured: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                  <span>منتج مميز</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={productForm.isNew}
-                    onChange={(e) => setProductForm({ ...productForm, isNew: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                  <span>وصل حديثاً</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={productForm.isBestSeller}
-                    onChange={(e) => setProductForm({ ...productForm, isBestSeller: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 rounded"
-                  />
-                  <span>الأكثر مبيعاً</span>
-                </label>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsProductModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow"
-                >
-                  {editingProductId ? 'حفظ التعديلات' : 'إضافة المنتج للمتجر'}
                 </button>
               </div>
             </form>

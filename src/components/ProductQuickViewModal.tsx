@@ -49,13 +49,16 @@ export const ProductQuickViewModal: React.FC = () => {
   };
 
   const handleWhatsAppOrder = () => {
-    const text = `السلام عليكم، أود حجز أو طلب المنتج التالي من متجر الموان:
+    const priceDetails = quickViewProduct.price > 0
+      ? `- السعر الإفرادي: ${quickViewProduct.price} جنيه مصري\n- الإجمالي التقريبي: ${(quickViewProduct.price * quantity).toFixed(2)} جنيه مصري`
+      : '- السعر: أرجو توضيح السعر الحالي (السعر عند التواصل)';
+
+    const text = `السلام عليكم، أود الاستفسار / طلب المنتج التالي من متجر الموان:
 - اسم المنتج: ${quickViewProduct.name}
 - الماركة: ${quickViewProduct.brand}
 - الخيار / المقاس: ${currentOption || 'القياسي'}
 - الكمية المطلوبة: ${quantity}
-- السعر الإفرادي: ${quickViewProduct.price} جنيه مصري
-- الإجمالي التقريبي: ${(quickViewProduct.price * quantity).toFixed(2)} جنيه مصري`;
+${priceDetails}`;
 
     window.open(`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -129,7 +132,7 @@ export const ProductQuickViewModal: React.FC = () => {
                       : 'bg-rose-50 text-rose-700 border-rose-200'
                   }`}
                 >
-                  {quickViewProduct.inStock ? 'متوفر بالمخزن' : 'نفذت الكمية'}
+                  {quickViewProduct.inStock ? 'متوفر' : 'نفذت الكمية'}
                 </span>
               </div>
 
@@ -161,22 +164,39 @@ export const ProductQuickViewModal: React.FC = () => {
 
               {/* Price */}
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80">
-                {quickViewProduct.originalPrice && quickViewProduct.originalPrice > quickViewProduct.price && (
-                  <span className="text-xs text-slate-400 line-through font-bold block">
-                    السعر السابق: EGP {quickViewProduct.originalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </span>
+                {quickViewProduct.price > 0 ? (
+                  <>
+                    {quickViewProduct.originalPrice && quickViewProduct.originalPrice > quickViewProduct.price && (
+                      <span className="text-xs text-slate-400 line-through font-bold block">
+                        السعر السابق: EGP {quickViewProduct.originalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    )}
+                    <div className="flex items-baseline gap-1 mt-0.5">
+                      <span className="text-xs font-bold text-slate-600">EGP</span>
+                      <span className="text-2xl font-black text-rose-600">
+                        {quickViewProduct.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-xs text-slate-500 font-medium mr-1">/ {quickViewProduct.unit}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-0.5">
+                    <div className="text-lg sm:text-xl font-black text-blue-700">
+                      السعر عند التواصل
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium">
+                      تواصل معنا عبر واتساب أو الهاتف لمعرفة السعر المحدث
+                    </div>
+                  </div>
                 )}
-                <div className="flex items-baseline gap-1 mt-0.5">
-                  <span className="text-xs font-bold text-slate-600">EGP</span>
-                  <span className="text-2xl font-black text-rose-600">
-                    {quickViewProduct.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium mr-1">/ {quickViewProduct.unit}</span>
-                </div>
                 {quickViewProduct.inStock && (
-                  <div className="text-[11px] text-emerald-700 font-bold mt-1 flex items-center gap-1">
+                  <div className="text-[11px] text-emerald-700 font-bold mt-1.5 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>جاهز للشحن الفوري ({quickViewProduct.stockCount} {quickViewProduct.unit})</span>
+                    <span>
+                      {quickViewProduct.stockCount > 0
+                        ? `متوفر وجاهز للشحن الفوري (${quickViewProduct.stockCount} ${quickViewProduct.unit})`
+                        : 'متوفر'}
+                    </span>
                   </div>
                 )}
               </div>
@@ -270,10 +290,18 @@ export const ProductQuickViewModal: React.FC = () => {
         {/* Footer Actions */}
         <div className="bg-slate-50 p-4 sm:p-5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-[11px] text-slate-500">الإجمالي:</div>
-            <div className="text-base sm:text-lg font-black text-rose-600">
-              EGP {(quickViewProduct.price * quantity).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            <div className="text-[11px] text-slate-500">
+              {quickViewProduct.price > 0 ? 'الإجمالي:' : 'السعر:'}
             </div>
+            {quickViewProduct.price > 0 ? (
+              <div className="text-base sm:text-lg font-black text-rose-600">
+                EGP {(quickViewProduct.price * quantity).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+            ) : (
+              <div className="text-sm sm:text-base font-black text-blue-700">
+                السعر عند التواصل
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">

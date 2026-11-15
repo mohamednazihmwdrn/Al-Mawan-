@@ -26,7 +26,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const handleWhatsAppOrder = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = `السلام عليكم، أود طلب المنتج التالي من متجر الموان:\n- المنتج: ${product.name}\n- الماركة: ${product.brand}\n- السعر: ${product.price} جنيه مصري\nالرابط/الكود: #${product.id}`;
+    const priceLine = product.price > 0
+      ? `- السعر: ${product.price} جنيه مصري`
+      : '- السعر: أرجو توضيح السعر (السعر عند التواصل)';
+    const text = `السلام عليكم، أود الاستفسار / طلب المنتج التالي من متجر الموان:\n- المنتج: ${product.name}\n- الماركة: ${product.brand}\n${priceLine}\nالرابط/الكود: #${product.id}`;
     window.open(`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -58,7 +61,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               : 'bg-rose-50 text-rose-700 border border-rose-200'
           }`}
         >
-          {product.inStock ? 'متوفر بالمخزن' : 'نفذت الكمية'}
+          {product.inStock ? 'متوفر' : 'نفذت الكمية'}
         </span>
       </div>
 
@@ -135,20 +138,28 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
         {/* Price Section */}
         <div className="pt-2">
-          {product.originalPrice && product.originalPrice > product.price && (
-            <div className="text-[11px] text-slate-400 line-through font-semibold">
-              EGP {product.originalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {product.price > 0 ? (
+            <>
+              {product.originalPrice && product.originalPrice > product.price && (
+                <div className="text-[11px] text-slate-400 line-through font-semibold">
+                  EGP {product.originalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              )}
+
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs font-bold text-slate-600">
+                  {product.hasOptions ? 'من EGP' : 'EGP'}
+                </span>
+                <span className="text-base sm:text-lg font-black text-rose-600">
+                  {product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs sm:text-sm font-black text-blue-700">
+              السعر عند التواصل
             </div>
           )}
-
-          <div className="flex items-baseline gap-1">
-            <span className="text-xs font-bold text-slate-600">
-              {product.hasOptions ? 'من EGP' : 'EGP'}
-            </span>
-            <span className="text-base sm:text-lg font-black text-rose-600">
-              {product.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
         </div>
       </div>
 

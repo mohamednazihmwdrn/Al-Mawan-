@@ -1262,7 +1262,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const nextInStock = !current.inStock;
     await updateProduct(id, {
       inStock: nextInStock,
-      stockCount: nextInStock ? current.stockCount || 10 : 0
+      stockCount: current.stockCount || 0
     });
   };
 

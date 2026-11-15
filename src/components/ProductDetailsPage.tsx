@@ -123,13 +123,16 @@ export const ProductDetailsPage: React.FC = () => {
   };
 
   const handleWhatsAppOrder = () => {
-    const text = `السلام عليكم متجر ${settings.storeName}، أود طلب المنتج التالي:
+    const priceDetails = selectedProduct.price > 0
+      ? `- السعر الإفرادي: ${selectedProduct.price} جنيه مصري\n- الإجمالي التقريبي: ${(selectedProduct.price * quantity).toFixed(2)} جنيه مصري`
+      : '- السعر: أرجو توضيح السعر الحالي (السعر عند التواصل)';
+
+    const text = `السلام عليكم متجر ${settings.storeName}، أود الاستفسار / طلب المنتج التالي:
 - اسم المنتج: ${selectedProduct.name}
 - الماركة: ${selectedProduct.brand}
 - الخيار / المقاس: ${currentOption || 'القياسي'}
 - الكمية المطلوبة: ${quantity}
-- السعر الإفرادي: ${selectedProduct.price} جنيه مصري
-- الإجمالي التقريبي: ${(selectedProduct.price * quantity).toFixed(2)} جنيه مصري`;
+${priceDetails}`;
 
     window.open(
       `https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(text)}`,
@@ -298,7 +301,7 @@ export const ProductDetailsPage: React.FC = () => {
                     : 'bg-rose-50 text-rose-700 border-rose-200'
                 }`}
               >
-                {selectedProduct.inStock ? 'متوفر بالمخزن' : 'نفذت الكمية'}
+                {selectedProduct.inStock ? 'متوفر' : 'نفذت الكمية'}
               </span>
             </div>
 
@@ -373,28 +376,43 @@ export const ProductDetailsPage: React.FC = () => {
             {/* Price Box */}
             <div className="p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
               <div>
-                {selectedProduct.originalPrice &&
-                  selectedProduct.originalPrice > selectedProduct.price && (
-                    <div className="text-xs text-slate-400 line-through font-bold">
-                      السعر السابق: EGP {selectedProduct.originalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                {selectedProduct.price > 0 ? (
+                  <>
+                    {selectedProduct.originalPrice &&
+                      selectedProduct.originalPrice > selectedProduct.price && (
+                        <div className="text-xs text-slate-400 line-through font-bold">
+                          السعر السابق: EGP {selectedProduct.originalPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </div>
+                      )}
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-xs font-bold text-slate-600">EGP</span>
+                      <span className="text-3xl font-black text-rose-600">
+                        {selectedProduct.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-xs text-slate-500 font-bold">
+                        / {selectedProduct.unit}
+                      </span>
                     </div>
-                  )}
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span className="text-xs font-bold text-slate-600">EGP</span>
-                  <span className="text-3xl font-black text-rose-600">
-                    {selectedProduct.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-xs text-slate-500 font-bold">
-                    / {selectedProduct.unit}
-                  </span>
-                </div>
+                  </>
+                ) : (
+                  <div className="space-y-0.5">
+                    <div className="text-xl sm:text-2xl font-black text-blue-700">
+                      السعر عند التواصل
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium">
+                      اضغط «اطلب عبر واتساب» أو اتصل بنا لمعرفة السعر المحدث
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>
                   {selectedProduct.inStock
-                    ? `متاح بالمعرض (${selectedProduct.stockCount} ${selectedProduct.unit})`
+                    ? selectedProduct.stockCount > 0
+                      ? `متوفر بالمعرض (${selectedProduct.stockCount} ${selectedProduct.unit})`
+                      : 'متوفر'
                     : 'غير متوفر حالياً'}
                 </span>
               </div>
@@ -458,11 +476,11 @@ export const ProductDetailsPage: React.FC = () => {
               >
                 <ShoppingCart className="w-4 h-4" />
                 <span>
-                  أضف إلى السلة (EGP{' '}
-                  {(selectedProduct.price * quantity).toLocaleString('en-US', {
-                    minimumFractionDigits: 2
-                  })}
-                  )
+                  {selectedProduct.price > 0
+                    ? `أضف إلى السلة (EGP ${(selectedProduct.price * quantity).toLocaleString('en-US', {
+                        minimumFractionDigits: 2
+                      })})`
+                    : 'أضف إلى السلة (السعر عند التواصل)'}
                 </span>
               </button>
 

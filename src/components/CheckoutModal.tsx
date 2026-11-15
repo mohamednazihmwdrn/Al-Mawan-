@@ -84,7 +84,10 @@ export const CheckoutModal: React.FC = () => {
         message += `📦 *المنتجات المطلوبة:*\n`;
 
         orderItems.forEach((it, i) => {
-          message += `${i + 1}. ${it.productName}\n   - الماركة: ${it.brand}\n   - الكمية: ${it.quantity} × ${it.unitPrice} ج = ${it.total} ج\n`;
+          const priceText = it.unitPrice > 0
+            ? `${it.quantity} × ${it.unitPrice} ج = ${it.total} ج`
+            : `${it.quantity} (السعر عند التواصل)`;
+          message += `${i + 1}. ${it.productName}\n   - الماركة: ${it.brand}\n   - الكمية والسعر: ${priceText}\n`;
           if (it.paintDetails) {
             message += `   🎨 تركيب كمبيوتر: كود ${it.paintDetails.colorCode} (${it.paintDetails.colorName}) - ${it.paintDetails.finish}\n`;
           }
