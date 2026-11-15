@@ -130,7 +130,13 @@ export const AdminDashboard: React.FC = () => {
   });
 
   useEffect(() => {
-    if (!editingProductId && categories.length > 0 && (!productForm.categoryId || productForm.categoryId === 'general')) {
+    if (
+      !editingProductId &&
+      categories.length > 0 &&
+      (!productForm.categoryId ||
+        productForm.categoryId === 'general' ||
+        !categories.some((c) => c.id === productForm.categoryId))
+    ) {
       setProductForm((prev) => ({ ...prev, categoryId: categories[0].id }));
     }
   }, [categories, editingProductId, productForm.categoryId]);
@@ -567,7 +573,10 @@ export const AdminDashboard: React.FC = () => {
 
   const handleAddCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName.trim()) return;
+    if (newCatName.trim().length < 2) {
+      showToast('يرجى كتابة اسم القسم (حرفين على الأقل)');
+      return;
+    }
     const catImage =
       newCatImage.trim() ||
       'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80';
