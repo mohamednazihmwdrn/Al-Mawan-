@@ -18,6 +18,9 @@ export const CategoryCircles: React.FC = () => {
   const handleSelect = (catId: string) => {
     setSelectedCategoryId(catId);
     setSelectedFilter('all');
+    setTimeout(() => {
+      document.getElementById('store-products-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
   };
 
   return (

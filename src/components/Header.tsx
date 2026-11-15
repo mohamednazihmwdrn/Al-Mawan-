@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import {
   Search,
@@ -9,10 +9,9 @@ import {
   Sparkles,
   PhoneCall,
   Flame,
-  Wrench,
-  Zap,
-  Hammer,
-  MessageSquare
+  ChevronLeft,
+  MessageSquare,
+  LayoutGrid
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -22,11 +21,11 @@ export const Header: React.FC = () => {
     cartCount,
     setIsCartOpen,
     activeView,
-    setActiveView,
     closeProductDetails,
     searchQuery,
     setSearchQuery,
     categories,
+    products,
     selectedCategoryId,
     setSelectedCategoryId,
     selectedFilter,
@@ -35,20 +34,41 @@ export const Header: React.FC = () => {
     triggerSecretClick
   } = useStore();
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sideMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSideMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sideMenuOpen]);
+
+  const scrollToProducts = () => {
+    setTimeout(() => {
+      document.getElementById('store-products-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
 
   const handleCategoryClick = (catId: string | null) => {
     setSelectedCategoryId(catId);
     setSelectedFilter('all');
     if (activeView !== 'storefront') closeProductDetails();
-    setMobileMenuOpen(false);
+    setSideMenuOpen(false);
+    if (catId !== null) {
+      scrollToProducts();
+    }
   };
 
   const handleFilterClick = (filter: 'all' | 'deals' | 'new' | 'bestsellers') => {
     setSelectedFilter(filter);
     setSelectedCategoryId(null);
     if (activeView !== 'storefront') closeProductDetails();
-    setMobileMenuOpen(false);
+    setSideMenuOpen(false);
+    if (filter !== 'all') {
+      scrollToProducts();
+    }
   };
 
   return (
@@ -155,13 +175,15 @@ export const Header: React.FC = () => {
               )}
             </button>
 
-            {/* Mobile Hamburger Menu Toggle */}
+            {/* Side Menu Drawer Toggle (Mobile & Desktop) */}
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 md:hidden rounded-lg bg-white/10 hover:bg-white/20 text-white"
-              aria-label="القائمة"
+              type="button"
+              onClick={() => setSideMenuOpen(!sideMenuOpen)}
+              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              aria-label="القائمة الجانبية"
+              title="القائمة الجانبية - الأقسام"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {sideMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
@@ -244,74 +266,164 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-slate-900 border-b border-white/10 px-4 py-4 text-sm animate-in slide-in-from-top duration-200">
-          <div className="space-y-2 mb-4">
-            <div className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">الأقسام الرئيسية</div>
-            <button
-              onClick={() => handleCategoryClick(null)}
-              className="w-full text-right py-2 px-3 rounded-lg hover:bg-white/10 text-white flex items-center justify-between"
-            >
-              <span>جميع المنتجات والمعروضات</span>
-              <Sparkles className="w-4 h-4 text-amber-400" />
-            </button>
-            {settings.showPaintStudio !== false && (
-              <button
-                onClick={() => {
-                  setIsPaintStudioOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full text-right py-2 px-3 rounded-lg bg-teal-800/40 border border-teal-500/30 text-teal-200 flex items-center justify-between"
-              >
-                <span>🎨 استوديو كمبيوتر الألوان وتحديد الأكواد</span>
-                <span className="text-[10px] bg-teal-500 text-white px-2 py-0.5 rounded-full">فوري</span>
-              </button>
-            )}
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => handleCategoryClick(cat.id)}
-                className={`w-full text-right py-2 px-3 rounded-lg flex items-center justify-between ${
-                  selectedCategoryId === cat.id ? 'bg-amber-400 text-slate-950 font-bold' : 'hover:bg-white/10 text-blue-100'
-                }`}
-              >
-                <span>{cat.name}</span>
-                {cat.id.includes('power') && <Zap className="w-4 h-4 text-amber-400" />}
-                {cat.id.includes('hand') && <Wrench className="w-4 h-4 text-blue-400" />}
-                {cat.id.includes('construction') && <Hammer className="w-4 h-4 text-orange-400" />}
-              </button>
-            ))}
-          </div>
+      {/* Slide-out Side Menu Drawer (القائمة الجانبية للأقسام) */}
+      {sideMenuOpen && (
+        <div className="fixed inset-0 z-50 flex justify-start" dir="rtl">
+          {/* Dark Backdrop */}
+          <div
+            onClick={() => setSideMenuOpen(false)}
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-[2px] transition-opacity"
+          />
 
-          <div className="pt-3 border-t border-white/10 space-y-2">
-            <PWAInstallButton variant="mobileMenu" onAfterAction={() => setMobileMenuOpen(false)} />
-            <div className="grid grid-cols-2 gap-2">
-              <a
-                href={`tel:${settings.phoneNumber || '01008377405'}`}
-                className="py-2.5 px-2 rounded-lg bg-white/10 text-white font-bold text-xs flex items-center justify-center gap-1.5"
+          {/* Side Panel */}
+          <aside className="relative z-10 w-72 sm:w-80 max-w-[85vw] h-full bg-[#0f2858] text-white shadow-2xl border-l border-white/15 flex flex-col">
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between gap-2 px-4 py-3.5 bg-[#163674] border-b border-white/10">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black shrink-0 shadow">
+                  <span className="text-lg">م</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-black text-white truncate">{settings.storeName}</div>
+                  <div className="text-[11px] font-bold text-amber-300">القائمة الجانبية للأقسام</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSideMenuOpen(false)}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors shrink-0"
+                aria-label="إغلاق القائمة الجانبية"
               >
-                <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-                <span dir="ltr">{settings.phoneNumber || '01008377405'}</span>
-              </a>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drawer Scrollable Content */}
+            <div className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-black text-amber-400 uppercase tracking-wider px-2 mb-2 flex items-center gap-1.5">
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>الأقسام الرئيسية</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleCategoryClick(null)}
+                  className={`w-full text-right py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-between transition-all ${
+                    selectedCategoryId === null && selectedFilter === 'all'
+                      ? 'bg-amber-400 text-slate-950 font-black shadow'
+                      : 'hover:bg-white/10 text-white'
+                  }`}
+                >
+                  <span>جميع الأقسام والمنتجات</span>
+                  <Sparkles className={`w-4 h-4 ${selectedCategoryId === null && selectedFilter === 'all' ? 'text-slate-950' : 'text-amber-400'}`} />
+                </button>
+
+                {categories.map((cat) => {
+                  const catCount = products.filter((p) => p.categoryId === cat.id).length;
+                  const isActive = selectedCategoryId === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => handleCategoryClick(cat.id)}
+                      className={`w-full text-right py-2 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-between gap-2 transition-all ${
+                        isActive
+                          ? 'bg-amber-400 text-slate-950 font-black shadow'
+                          : 'hover:bg-white/10 text-blue-50 font-bold'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {cat.image && (
+                          <img
+                            src={cat.image}
+                            alt={cat.name}
+                            className="w-7 h-7 rounded-lg object-cover border border-white/20 shrink-0"
+                          />
+                        )}
+                        <span className="truncate">{cat.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-md font-black ${
+                            isActive ? 'bg-slate-950/15 text-slate-950' : 'bg-white/15 text-blue-100'
+                          }`}
+                        >
+                          {catCount}
+                        </span>
+                        <ChevronLeft className="w-4 h-4 opacity-75" />
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {categories.length === 0 && (
+                  <div className="text-xs text-blue-200/70 px-3 py-2">
+                    لم يتم إضافة أقسام بعد
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-white/10 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => handleFilterClick('deals')}
+                  className={`w-full text-right py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-between transition-all ${
+                    selectedFilter === 'deals'
+                      ? 'bg-rose-500 text-white font-black shadow'
+                      : 'hover:bg-white/10 text-rose-200'
+                  }`}
+                >
+                  <span>العروض والخصومات</span>
+                  <Flame className="w-4 h-4 text-rose-400 fill-rose-400" />
+                </button>
+
+                {settings.showPaintStudio !== false && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPaintStudioOpen(true);
+                      setSideMenuOpen(false);
+                    }}
+                    className="w-full text-right py-2.5 px-3 rounded-xl bg-teal-800/40 border border-teal-500/30 text-teal-100 text-xs sm:text-sm font-bold flex items-center justify-between hover:bg-teal-800/60 transition-colors"
+                  >
+                    <span>🎨 استوديو كمبيوتر الألوان</span>
+                    <span className="text-[10px] bg-teal-500 text-white px-2 py-0.5 rounded-full font-black">فوري</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Drawer Footer Contact & PWA */}
+            <div className="p-3.5 border-t border-white/10 bg-[#0b1f45] space-y-2">
+              <PWAInstallButton variant="mobileMenu" onAfterAction={() => setSideMenuOpen(false)} />
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={`tel:${settings.phoneNumber || '01008377405'}`}
+                  className="py-2 px-2 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center justify-center gap-1.5"
+                >
+                  <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
+                  <span dir="ltr">{settings.phoneNumber || '01008377405'}</span>
+                </a>
+                <a
+                  href={`tel:${settings.phoneNumber2 || '01029190615'}`}
+                  className="py-2 px-2 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center justify-center gap-1.5"
+                >
+                  <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
+                  <span dir="ltr">{settings.phoneNumber2 || '01029190615'}</span>
+                </a>
+              </div>
               <a
-                href={`tel:${settings.phoneNumber2 || '01029190615'}`}
-                className="py-2.5 px-2 rounded-lg bg-white/10 text-white font-bold text-xs flex items-center justify-center gap-1.5"
+                href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent('السلام عليكم، استفسار بخصوص منتجات الموان')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2 px-3 rounded-lg bg-emerald-700/60 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 border border-emerald-500/30"
               >
-                <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-                <span dir="ltr">{settings.phoneNumber2 || '01029190615'}</span>
+                <MessageSquare className="w-4 h-4 text-emerald-300" />
+                <span>واتساب مبيعات: {settings.phoneNumber2 || '01029190615'}</span>
               </a>
             </div>
-            <a
-              href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent('السلام عليكم، استفسار بخصوص منتجات الموان')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-2.5 px-3 rounded-lg bg-emerald-700/50 text-white font-bold text-xs flex items-center justify-center gap-2 border border-emerald-500/30"
-            >
-              <MessageSquare className="w-4 h-4 text-emerald-300" />
-              <span>محادثة واتساب مبيعات: {settings.phoneNumber2 || '01029190615'}</span>
-            </a>
-          </div>
+          </aside>
         </div>
       )}
     </header>

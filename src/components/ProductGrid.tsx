@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
-import { AlertCircle, PackagePlus, MessageSquare, Phone, Layers } from 'lucide-react';
+import { AlertCircle, PackagePlus, MessageSquare, Phone, Layers, ChevronLeft, ArrowRight } from 'lucide-react';
 
 export const ProductGrid: React.FC = () => {
   const {
@@ -31,7 +31,7 @@ export const ProductGrid: React.FC = () => {
     [categorySubPages, selectedSubPageId]
   );
 
-  // Filter products
+  // Filter products when inside a category, subpage, search, or filter
   const filteredProducts = useMemo(() => {
     return products
       .filter((prod) => {
@@ -78,18 +78,83 @@ export const ProductGrid: React.FC = () => {
       .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
   }, [products, selectedCategoryId, selectedSubPageId, searchQuery, selectedFilter]);
 
+  // Group products by category for the main storefront view
+  const categorySections = useMemo(() => {
+    return categories.map((cat) => ({
+      category: cat,
+      items: products
+        .filter((prod) => prod.categoryId === cat.id)
+        .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0))
+    }));
+  }, [categories, products]);
+
+  // Products not belonging to any explicit category (e.g. 'general')
+  const uncategorizedProducts = useMemo(() => {
+    const categoryIds = new Set(categories.map((c) => c.id));
+    return products
+      .filter((prod) => !categoryIds.has(prod.categoryId))
+      .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
+  }, [categories, products]);
+
   const currentCategory = categories.find((c) => c.id === selectedCategoryId) || null;
   const currentCategoryName = currentCategory?.name;
+
+  const isHomeOverview =
+    !selectedCategoryId && !selectedSubPageId && selectedFilter === 'all' && !searchQuery.trim();
 
   const hasSubPagesBar = Boolean(selectedCategoryId && categorySubPages.length > 0);
   const hasActiveFiltersBar = Boolean(
     selectedCategoryId || selectedSubPageId || selectedFilter !== 'all' || searchQuery
   );
 
+  const handleEnterCategory = (catId: string) => {
+    setSelectedCategoryId(catId);
+    setSelectedFilter('all');
+    setTimeout(() => {
+      document.getElementById('store-products-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
   return (
-    <section className="max-w-7xl mx-auto px-3 sm:px-4 py-6">
-      {(hasSubPagesBar || hasActiveFiltersBar) && (
+    <section id="store-products-section" className="max-w-7xl mx-auto w-full px-3 sm:px-4 py-6 scroll-mt-24">
+      {(selectedCategoryId || hasSubPagesBar || hasActiveFiltersBar) && (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-sm mb-6">
+          {/* Selected Category Header Banner */}
+          {currentCategory && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 mb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                {currentCategory.image && (
+                  <img
+                    src={currentCategory.image}
+                    alt={currentCategory.name}
+                    className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-xs shrink-0"
+                  />
+                )}
+                <div>
+                  <h2 className="text-base sm:text-xl font-black text-slate-900">
+                    {currentCategory.name}
+                  </h2>
+                  <p className="text-xs text-slate-500 font-bold">
+                    {filteredProducts.length} منتج متاح في هذا القسم
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategoryId(null);
+                  setSelectedSubPageId(null);
+                  setSelectedFilter('all');
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition-colors"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                <span>العودة لجميع الأقسام</span>
+              </button>
+            </div>
+          )}
+
           {/* Subpages inside selected category */}
           {hasSubPagesBar && (
             <div>
@@ -213,8 +278,104 @@ export const ProductGrid: React.FC = () => {
         </div>
       )}
 
-      {/* Grid of Product Cards */}
-      {filteredProducts.length > 0 ? (
+      {/* Main Storefront: Every category with its products in horizontal scroll */}
+      {isHomeOverview && categories.length > 0 ? (
+        <div className="space-y-8">
+          {categorySections.map(({ category, items }) => (
+            <div key={category.id} className="space-y-3">
+              {/* Category Row Header */}
+              <div className="flex items-center justify-between gap-2 bg-white rounded-2xl border border-slate-200/80 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => handleEnterCategory(category.id)}
+                  className="flex items-center gap-2.5 text-right group"
+                >
+                  {category.image && (
+                    <img
+                      src={category.image}
+                      alt={category.name}
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-slate-200 shrink-0"
+                    />
+                  )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-sm sm:text-lg font-black text-slate-900 group-hover:text-blue-700 transition-colors">
+                      {category.name}
+                    </h2>
+                    <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                      {items.length} منتج
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleEnterCategory(category.id)}
+                  className="text-xs sm:text-sm font-black text-[#163674] hover:text-blue-700 flex items-center gap-0.5 shrink-0 px-2.5 py-1.5 rounded-xl hover:bg-blue-50 transition-colors"
+                >
+                  <span>عرض الكل</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Horizontal Scrollable Products Row */}
+              {items.length > 0 ? (
+                <div className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto pb-3 px-0.5 snap-x snap-mandatory">
+                  {items.map((product) => (
+                    <div
+                      key={product.id}
+                      className="w-[176px] sm:w-[224px] lg:w-[248px] shrink-0 snap-start"
+                    >
+                      <ProductCard product={product} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white/80 rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-center text-xs sm:text-sm text-slate-500 font-bold">
+                  لا توجد منتجات مضافة في قسم «{category.name}» حالياً
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Uncategorized / General Products Row if any exist */}
+          {uncategorizedProducts.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2 bg-white rounded-2xl border border-slate-200/80 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm sm:text-lg font-black text-slate-900">منتجات عامة</h2>
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                    {uncategorizedProducts.length} منتج
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto pb-3 px-0.5 snap-x snap-mandatory">
+                {uncategorizedProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="w-[176px] sm:w-[224px] lg:w-[248px] shrink-0 snap-start"
+                  >
+                    <ProductCard product={product} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {hasMoreProducts && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={loadMoreProducts}
+                className="px-6 py-3 rounded-2xl bg-[#163674] hover:bg-[#122854] text-white font-black text-xs sm:text-sm shadow-md transition-all active:scale-95"
+              >
+                عرض المزيد من المنتجات والمعدات
+              </button>
+            </div>
+          )}
+        </div>
+      ) : filteredProducts.length > 0 ? (
+        /* Category / Subpage / Search / Filter View: Full Vertical Grid showing ALL matching products */
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
             {filteredProducts.map((product) => (
@@ -242,6 +403,8 @@ export const ProductGrid: React.FC = () => {
           <h3 className="text-base sm:text-lg font-black text-slate-900 mb-2">
             {activeSubPage
               ? `صفحة "${activeSubPage.name}" جاهزة لإضافة المنتجات`
+              : currentCategoryName
+              ? `قسم "${currentCategoryName}" جاهز لإضافة المنتجات`
               : `جاري تجهيز وإضافة منتجات ${settings.storeName}`}
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-5">
@@ -251,7 +414,7 @@ export const ProductGrid: React.FC = () => {
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2.5">
             <a
-              href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent(`السلام عليكم ${settings.storeName}، أريد الاستفسار عن توفر منتجات وأسعار${activeSubPage ? ` (${activeSubPage.name})` : ''}`)}`}
+              href={`https://wa.me/${settings.whatsappNumber || '201029190615'}?text=${encodeURIComponent(`السلام عليكم ${settings.storeName}، أريد الاستفسار عن توفر منتجات وأسعار${activeSubPage ? ` (${activeSubPage.name})` : currentCategoryName ? ` (${currentCategoryName})` : ''}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow flex items-center gap-1.5 transition-colors"
@@ -272,10 +435,14 @@ export const ProductGrid: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-12 text-center max-w-lg mx-auto">
           <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-1">
-            لا توجد منتجات تطابق بحثك حالياً
+            {currentCategoryName && !searchQuery.trim()
+              ? `لا توجد منتجات مضافة في قسم "${currentCategoryName}" حالياً`
+              : 'لا توجد منتجات تطابق بحثك حالياً'}
           </h3>
           <p className="text-xs sm:text-sm text-slate-500 mb-4">
-            جرب كتابة اسم مختلف أو إزالة الفلاتر، أو تواصل مع خدمة العملاء لتوفير طلبك الخاص.
+            {currentCategoryName && !searchQuery.trim()
+              ? 'يمكنك العودة لاستعراض باقي الأقسام أو التواصل معنا للاستفسار عن أي منتج.'
+              : 'جرب كتابة اسم مختلف أو إزالة الفلاتر، أو تواصل مع خدمة العملاء لتوفير طلبك الخاص.'}
           </p>
           <button
             onClick={() => {
@@ -285,10 +452,11 @@ export const ProductGrid: React.FC = () => {
             }}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow transition-colors"
           >
-            إظهار كافة منتجات المحل
+            إظهار كافة أقسام ومنتجات المحل
           </button>
         </div>
       )}
     </section>
   );
 };
+

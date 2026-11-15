@@ -38,7 +38,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   return (
     <div
       onClick={() => openProductDetails(product)}
-      className="bg-white rounded-2xl border border-slate-200/90 hover:border-blue-400 p-3 sm:p-4 flex flex-col justify-between transition-all duration-300 hover:shadow-xl group relative cursor-pointer"
+      className="h-full bg-white rounded-2xl border border-slate-200/90 hover:border-blue-400 p-3 sm:p-4 flex flex-col justify-between transition-all duration-300 hover:shadow-xl group relative cursor-pointer"
     >
       {/* Top Badges */}
       <div className="flex items-center justify-between gap-1 absolute top-2.5 right-2.5 left-2.5 z-10 pointer-events-none">
