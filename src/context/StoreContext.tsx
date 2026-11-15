@@ -45,7 +45,8 @@ import {
 import {
   db,
   OperationType,
-  handleFirestoreError
+  handleFirestoreError,
+  isFirestoreQuotaError
 } from '../firebase';
 import { sanitizeId } from '../utils/imageCompress';
 
@@ -214,7 +215,25 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 const AUTH_KEY = 'almawan_owner_session';
 const CART_KEY = 'almawan_cart_v1';
+const CACHE_PREFIX = 'almawan_cache_v1_';
 const PRODUCT_PAGE_SIZE = 60;
+
+function readStoreCache<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(`${CACHE_PREFIX}${key}`);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoreCache<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(value));
+  } catch {
+    // ignore storage quota errors
+  }
+}
 
 // --- Strict Sanitization Builders matching firestore.rules allowlists ---
 
@@ -426,15 +445,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [secretClicks, setSecretClicks] = useState(0);
   const secretClickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Core Data (Start empty before Firestore responds so deleted defaults never flash)
-  const [settings, setSettings] = useState<StoreSettings>(INITIAL_SETTINGS);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [subPages, setSubPages] = useState<SubPage[]>([]);
-  const [paintCatalogs, setPaintCatalogs] = useState<PaintCatalog[]>([]);
-  const [banners, setBanners] = useState<BannerSlide[]>([]);
-  const [brands, setBrands] = useState<StoreBrand[]>([]);
-  const [features, setFeatures] = useState<StoreFeature[]>([]);
+  // Core Data (Hydrated from local cache for offline/quota resilience, kept synced with Firestore)
+  const [settings, setSettings] = useState<StoreSettings>(() =>
+    readStoreCache<StoreSettings>('settings', INITIAL_SETTINGS)
+  );
+  const [products, setProducts] = useState<Product[]>(() =>
+    readStoreCache<Product[]>('products', [])
+  );
+  const [categories, setCategories] = useState<Category[]>(() =>
+    readStoreCache<Category[]>('categories', [])
+  );
+  const [subPages, setSubPages] = useState<SubPage[]>(() =>
+    readStoreCache<SubPage[]>('subpages', [])
+  );
+  const [paintCatalogs, setPaintCatalogs] = useState<PaintCatalog[]>(() =>
+    readStoreCache<PaintCatalog[]>('paint_catalogs', [])
+  );
+  const [banners, setBanners] = useState<BannerSlide[]>(() =>
+    readStoreCache<BannerSlide[]>('banners', [])
+  );
+  const [brands, setBrands] = useState<StoreBrand[]>(() =>
+    readStoreCache<StoreBrand[]>('brands', INITIAL_BRANDS)
+  );
+  const [features, setFeatures] = useState<StoreFeature[]>(() =>
+    readStoreCache<StoreFeature[]>('features', INITIAL_FEATURES)
+  );
   const [orders, setOrders] = useState<Order[]>([]);
   const [inquiries, setInquiries] = useState<ContactInquiry[]>([]);
 
@@ -451,6 +486,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const demoCleanupAttemptedRef = useRef<boolean>(false);
   const brandsMigrationAttemptedRef = useRef<boolean>(false);
   const ilockLabelFixedRef = useRef<boolean>(false);
+  const quotaNoticeShownRef = useRef<boolean>(false);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -590,6 +626,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          console.warn('Firestore quota reached watching selected product.');
+          return;
+        }
         handleFirestoreError(err, OperationType.GET, `products/${selectedProductId}`);
       }
     );
@@ -679,6 +719,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 3400);
   }, []);
 
+  const notifyQuotaExceeded = useCallback(() => {
+    if (!quotaNoticeShownRef.current) {
+      quotaNoticeShownRef.current = true;
+      console.warn('Firestore daily free-tier read quota exceeded. Using locally cached data.');
+      showToast('تم الوصول للحد اليومي المجاني لقراءة قاعدة البيانات — يتم عرض النسخة المحفوظة مؤقتاً');
+    }
+  }, [showToast]);
+
   // Seed default store structure (settings, partner brands, features — NO dummy products/banners/categories)
   const seedCloudDefaults = useCallback(
     async (force = false) => {
@@ -732,13 +780,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     },
     [showToast]
   );
-
-  // Auto-seed store settings & partner brands once if settings/store is missing
-  useEffect(() => {
-    if (autoSeedAttemptedRef.current) return;
-    autoSeedAttemptedRef.current = true;
-    seedCloudDefaults(false).catch(() => {});
-  }, [seedCloudDefaults]);
 
   // One-time automatic cleanup of ALL legacy dummy products, dummy banners, and dummy categories
   useEffect(() => {
@@ -804,19 +845,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       settingsRef,
       (snap) => {
         if (snap.exists()) {
+          const nextSettings = { ...INITIAL_SETTINGS, ...(snap.data() as Partial<StoreSettings>) };
           setIsCloudSeeded(true);
-          setSettings({ ...INITIAL_SETTINGS, ...(snap.data() as Partial<StoreSettings>) });
+          setSettings(nextSettings);
+          writeStoreCache('settings', nextSettings);
           setLastSyncedTime(Date.now());
         } else {
           setIsCloudSeeded(false);
+          if (!autoSeedAttemptedRef.current && !snap.metadata.fromCache) {
+            autoSeedAttemptedRef.current = true;
+            seedCloudDefaults(false).catch(() => {});
+          }
         }
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.GET, 'settings/store');
       }
     );
     return () => unsub();
-  }, []);
+  }, [notifyQuotaExceeded, seedCloudDefaults]);
 
   // 2. Banners listener
   useEffect(() => {
@@ -829,17 +880,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             .map((d) => ({ ...(d.data() as BannerSlide), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
           setBanners(loaded);
+          writeStoreCache('banners', loaded);
           setLastSyncedTime(Date.now());
         } else {
           setBanners([]);
+          writeStoreCache('banners', []);
         }
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'banners');
       }
     );
     return () => unsub();
-  }, []);
+  }, [notifyQuotaExceeded]);
 
   // 3. Categories listener
   useEffect(() => {
@@ -851,17 +908,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!snap.empty) {
           const loaded = snap.docs.map((d) => ({ ...(d.data() as Category), id: d.id }));
           setCategories(loaded);
+          writeStoreCache('categories', loaded);
           setLastSyncedTime(Date.now());
         } else {
           setCategories([]);
+          writeStoreCache('categories', []);
         }
       },
       (err) => {
+        setCategoriesLoaded(true);
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'categories');
       }
     );
     return () => unsub();
-  }, []);
+  }, [notifyQuotaExceeded]);
 
   // 3A-sub. SubPages listener
   useEffect(() => {
@@ -875,17 +939,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             .map((d) => ({ ...(d.data() as SubPage), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
           setSubPages(loaded);
+          writeStoreCache('subpages', loaded);
           setLastSyncedTime(Date.now());
         } else {
           setSubPages([]);
+          writeStoreCache('subpages', []);
         }
       },
       (err) => {
+        setSubPagesLoaded(true);
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'subpages');
       }
     );
     return () => unsub();
-  }, []);
+  }, [notifyQuotaExceeded]);
 
   // 3A-paint. Paint Color Catalogs listener (PDFs & Images)
   useEffect(() => {
@@ -896,17 +967,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!snap.empty) {
           const loaded = snap.docs.map((d) => ({ ...(d.data() as PaintCatalog), id: d.id }));
           setPaintCatalogs(loaded);
+          writeStoreCache('paint_catalogs', loaded);
           setLastSyncedTime(Date.now());
         } else {
           setPaintCatalogs([]);
+          writeStoreCache('paint_catalogs', []);
         }
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'paint_catalogs');
       }
     );
     return () => unsub();
-  }, []);
+  }, [notifyQuotaExceeded]);
 
   // 3B. Partner Brands listener + One-time upgrade from legacy text-only brands to the 13 logo brands
   useEffect(() => {
@@ -944,6 +1021,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             };
             migrateBrands();
             setBrands(INITIAL_BRANDS);
+            writeStoreCache('brands', INITIAL_BRANDS);
           } else {
             const ilockDoc = loaded.find((b) => b.id === 'brand-ilock');
             if (ilockDoc && (ilockDoc.label.includes('أقفال') || ilockDoc.label.includes('كوالين'))) {
@@ -951,6 +1029,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 b.id === 'brand-ilock' ? { ...b, label: 'آي لوك لأدوات الكهرباء' } : b
               );
               setBrands(corrected);
+              writeStoreCache('brands', corrected);
               if (!ilockLabelFixedRef.current) {
                 ilockLabelFixedRef.current = true;
                 updateDoc(doc(db, 'brands', 'brand-ilock'), {
@@ -959,19 +1038,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               }
             } else {
               setBrands(loaded);
+              writeStoreCache('brands', loaded);
             }
           }
           setLastSyncedTime(Date.now());
         } else {
           setBrands([]);
+          writeStoreCache('brands', []);
         }
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'brands');
       }
     );
     return () => unsub();
-  }, []);
+  }, [notifyQuotaExceeded]);
 
   // 3C. Store Features listener
   useEffect(() => {
@@ -984,17 +1069,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             .map((d) => ({ ...(d.data() as StoreFeature), id: d.id }))
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
           setFeatures(loaded);
+          writeStoreCache('features', loaded);
           setLastSyncedTime(Date.now());
         } else {
           setFeatures([]);
+          writeStoreCache('features', []);
         }
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'features');
       }
     );
     return () => unsub();
-  }, []);
+  }, [notifyQuotaExceeded]);
 
   // 4. Products listener
   useEffect(() => {
@@ -1011,17 +1102,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!snap.empty) {
           const loaded = snap.docs.map((d) => ({ ...(d.data() as Product), id: d.id }));
           setProducts(loaded);
+          writeStoreCache('products', loaded);
           setLastSyncedTime(Date.now());
         } else {
           setProducts([]);
+          writeStoreCache('products', []);
         }
       },
       (err) => {
+        setProductsLoaded(true);
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'products');
       }
     );
     return () => unsub();
-  }, [productLimit]);
+  }, [productLimit, notifyQuotaExceeded]);
 
   const loadMoreProducts = () => {
     setProductLimit((prev) => prev + PRODUCT_PAGE_SIZE);
@@ -1044,11 +1142,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setOrders(loaded);
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'orders');
       }
     );
     return () => unsub();
-  }, [isOwnerAuthenticated]);
+  }, [isOwnerAuthenticated, notifyQuotaExceeded]);
 
   // 6. Inquiries listener
   useEffect(() => {
@@ -1065,11 +1167,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setInquiries(loaded);
       },
       (err) => {
+        if (isFirestoreQuotaError(err)) {
+          notifyQuotaExceeded();
+          return;
+        }
         handleFirestoreError(err, OperationType.LIST, 'inquiries');
       }
     );
     return () => unsub();
-  }, [isOwnerAuthenticated]);
+  }, [isOwnerAuthenticated, notifyQuotaExceeded]);
 
   // --- Secret 10-Click Trigger & Owner Auth ---
 
@@ -1283,6 +1389,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           onReviews(list);
         },
         (err) => {
+          if (isFirestoreQuotaError(err)) {
+            onReviews([]);
+            return;
+          }
           handleFirestoreError(err, OperationType.LIST, path);
         }
       );
